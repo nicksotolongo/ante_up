@@ -140,6 +140,7 @@ function WeeklyStandings({ leagueId }: { leagueId: number }) {
                 <TableHead className="w-12 text-center font-bold text-xs uppercase tracking-wider text-foreground">#</TableHead>
                 <TableHead className="font-bold text-xs uppercase tracking-wider text-foreground">Player</TableHead>
                 <TableHead className="text-right font-bold text-xs uppercase tracking-wider text-foreground">Pts</TableHead>
+                <TableHead className="text-right font-bold text-xs uppercase tracking-wider text-foreground hidden sm:table-cell">Max</TableHead>
                 <TableHead className="text-right font-bold text-xs uppercase tracking-wider text-foreground">Record</TableHead>
                 <TableHead className="text-right font-bold text-xs uppercase tracking-wider text-foreground hidden sm:table-cell">Money</TableHead>
               </TableRow>
@@ -159,6 +160,9 @@ function WeeklyStandings({ leagueId }: { leagueId: number }) {
                   </TableCell>
                   <TableCell className="text-right font-mono font-black text-lg tabular-nums">
                     {entry.points}
+                  </TableCell>
+                  <TableCell className="text-right font-mono text-muted-foreground text-sm tabular-nums hidden sm:table-cell">
+                    {entry.maxPossible}
                   </TableCell>
                   <TableCell className="text-right font-mono">
                     <span className="text-pick-win">{entry.normalCorrect}</span>
