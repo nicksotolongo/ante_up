@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db, leagueMembersTable, leaguesTable, pickEventsTable, picksTable, submissionsTable, usersTable } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -19,7 +19,7 @@ router.get("/dashboard", async (req, res): Promise<void> => {
 
   const leagueIds = memberships.map((m) => m.leagueId);
 
-  const leagues = await db.select().from(leaguesTable).where(sql`${leaguesTable.id} = ANY(${leagueIds})`);
+  const leagues = await db.select().from(leaguesTable).where(inArray(leaguesTable.id, leagueIds));
 
   const dashboardLeagues = await Promise.all(leagues.map(async (league) => {
     const membership = memberships.find((m) => m.leagueId === league.id)!;
@@ -65,10 +65,6 @@ router.get("/dashboard", async (req, res): Promise<void> => {
       };
     }
 
-    // Get my rank in the league (rough approximation from standings)
-    let myRank = null;
-    const allSubs = await db.select().from(submissionsTable).innerJoin(leagueMembersTable, and(eq(leagueMembersTable.userId, submissionsTable.userId), eq(leagueMembersTable.leagueId, league.id), eq(leagueMembersTable.status, "active"))).where(sql`${pickEventsTable.leagueId} IS NOT NULL`);
-
     return {
       league: {
         id: league.id,
@@ -79,7 +75,7 @@ router.get("/dashboard", async (req, res): Promise<void> => {
         userRole: membership.role,
         createdAt: league.createdAt.toISOString(),
       },
-      myRank,
+      myRank: null,
       totalMembers: Number(memberCount),
       activeEvent: activeEventData,
     };
