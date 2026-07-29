@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { and, eq, inArray, sql } from "drizzle-orm";
-import { db, eventGamesTable, leagueMembersTable, pickEventsTable, picksTable, submissionsTable, usersTable } from "@workspace/db";
+import { and, eq, or, sql } from "drizzle-orm";
+import { db, leagueMembersTable, pickEventsTable, picksTable, submissionsTable, usersTable } from "@workspace/db";
 import { GetSeasonStandingsParams, GetEventStandingsParams } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -16,52 +16,61 @@ router.get("/leagues/:leagueId/standings", async (req, res): Promise<void> => {
   const [member] = await db.select().from(leagueMembersTable).where(and(eq(leagueMembersTable.leagueId, leagueId), eq(leagueMembersTable.userId, userId), eq(leagueMembersTable.status, "active")));
   if (!member) { res.status(403).json({ error: "Not a member" }); return; }
 
-  const allMembers = await db.select({
-    userId: leagueMembersTable.userId,
-    firstName: usersTable.firstName,
-    lastName: usersTable.lastName,
-    profileImageUrl: usersTable.profileImageUrl,
-  }).from(leagueMembersTable).innerJoin(usersTable, eq(usersTable.id, leagueMembersTable.userId)).where(and(eq(leagueMembersTable.leagueId, leagueId), eq(leagueMembersTable.status, "active")));
+  const [allMembers, finalizedEvents] = await Promise.all([
+    db.select({
+      userId: leagueMembersTable.userId,
+      firstName: usersTable.firstName,
+      lastName: usersTable.lastName,
+      profileImageUrl: usersTable.profileImageUrl,
+    }).from(leagueMembersTable).innerJoin(usersTable, eq(usersTable.id, leagueMembersTable.userId)).where(and(eq(leagueMembersTable.leagueId, leagueId), eq(leagueMembersTable.status, "active"))),
+    db.select().from(pickEventsTable).where(and(eq(pickEventsTable.leagueId, leagueId), sql`${pickEventsTable.status} IN ('revealed', 'finalized')`)),
+  ]);
 
-  // Get all finalized events for this league
-  const finalizedEvents = await db.select().from(pickEventsTable).where(and(eq(pickEventsTable.leagueId, leagueId), sql`${pickEventsTable.status} IN ('revealed', 'finalized')`));
   const eventIds = finalizedEvents.map((e) => e.id);
 
-  const standings = await Promise.all(allMembers.map(async (m) => {
-    if (eventIds.length === 0) {
-      return {
-        userId: m.userId,
-        displayName: [m.firstName, m.lastName].filter(Boolean).join(" ") || m.userId,
-        profileImageUrl: m.profileImageUrl ?? null,
-        totalPoints: 0,
-        eventsEntered: 0,
-        weeklyWins: 0,
-        normalCorrect: 0,
-        normalTotal: 0,
-        moneyCorrect: 0,
-        moneyTotal: 0,
-        rank: 0,
-      };
-    }
+  // Short-circuit: no finalized events yet
+  if (eventIds.length === 0) {
+    const standings = allMembers.map((m, i) => ({
+      userId: m.userId,
+      displayName: [m.firstName, m.lastName].filter(Boolean).join(" ") || m.userId,
+      profileImageUrl: m.profileImageUrl ?? null,
+      totalPoints: 0, eventsEntered: 0, weeklyWins: 0,
+      normalCorrect: 0, normalTotal: 0, moneyCorrect: 0, moneyTotal: 0, rank: i + 1,
+    }));
+    res.json(standings);
+    return;
+  }
 
-    const subs = await db.select().from(submissionsTable).where(and(inArray(submissionsTable.pickEventId, eventIds), eq(submissionsTable.userId, m.userId)));
-    const eventsEntered = subs.length;
+  // Bulk-fetch all submissions + picks for all finalized events in two queries
+  // Use or(...eq()) to avoid ANY() serialization issues
+  const allSubs = await db.select().from(submissionsTable)
+    .where(or(...eventIds.map(id => eq(submissionsTable.pickEventId, id)))!);
 
-    let totalPoints = 0;
-    let normalCorrect = 0;
-    let normalTotal = 0;
-    let moneyCorrect = 0;
-    let moneyTotal = 0;
-    let weeklyWins = 0;
+  const subIds = allSubs.map(s => s.id);
+  const allPicks = subIds.length > 0
+    ? await db.select().from(picksTable)
+        .where(or(...subIds.map(id => eq(picksTable.submissionId, id)))!)
+    : [];
 
-    for (const sub of subs) {
-      const picks = await db.select().from(picksTable).where(eq(picksTable.submissionId, sub.id));
+  // Pre-compute event winner (highest points) per event
+  const eventTopScore = new Map<number, number>();
+  for (const eid of eventIds) {
+    const eventSubs = allSubs.filter(s => s.pickEventId === eid);
+    const scores = eventSubs.map(s => allPicks.filter(p => p.submissionId === s.id).reduce((sum, p) => sum + (p.pointsAwarded ?? 0), 0));
+    eventTopScore.set(eid, scores.length > 0 ? Math.max(...scores) : 0);
+  }
+
+  const standings = allMembers.map((m) => {
+    const mySubs = allSubs.filter(s => s.userId === m.userId);
+    let totalPoints = 0, normalCorrect = 0, normalTotal = 0, moneyCorrect = 0, moneyTotal = 0, weeklyWins = 0;
+
+    for (const sub of mySubs) {
+      const picks = allPicks.filter(p => p.submissionId === sub.id);
       const eventPoints = picks.reduce((sum, p) => sum + (p.pointsAwarded ?? 0), 0);
       totalPoints += eventPoints;
 
       for (const pick of picks) {
-        const isMoneyPick = sub.moneyPickGameId === pick.eventGameId;
-        if (isMoneyPick) {
+        if (sub.moneyPickGameId === pick.eventGameId) {
           moneyTotal++;
           if (pick.result === "win") moneyCorrect++;
         } else {
@@ -70,31 +79,18 @@ router.get("/leagues/:leagueId/standings", async (req, res): Promise<void> => {
         }
       }
 
-      // Check if this sub won the event
-      const allSubs = await db.select().from(submissionsTable).where(eq(submissionsTable.pickEventId, sub.pickEventId));
-      const eventScores = await Promise.all(allSubs.map(async (s) => {
-        const spicks = await db.select().from(picksTable).where(eq(picksTable.submissionId, s.id));
-        return spicks.reduce((sum, p) => sum + (p.pointsAwarded ?? 0), 0);
-      }));
-      const myScore = eventPoints;
-      const maxScore = Math.max(...eventScores);
-      if (myScore === maxScore && myScore > 0) weeklyWins++;
+      const top = eventTopScore.get(sub.pickEventId) ?? 0;
+      if (eventPoints > 0 && eventPoints === top) weeklyWins++;
     }
 
     return {
       userId: m.userId,
       displayName: [m.firstName, m.lastName].filter(Boolean).join(" ") || m.userId,
       profileImageUrl: m.profileImageUrl ?? null,
-      totalPoints,
-      eventsEntered,
-      weeklyWins,
-      normalCorrect,
-      normalTotal,
-      moneyCorrect,
-      moneyTotal,
-      rank: 0,
+      totalPoints, eventsEntered: mySubs.length, weeklyWins,
+      normalCorrect, normalTotal, moneyCorrect, moneyTotal, rank: 0,
     };
-  }));
+  });
 
   standings.sort((a, b) => b.totalPoints - a.totalPoints);
   standings.forEach((s, i) => { s.rank = i + 1; });

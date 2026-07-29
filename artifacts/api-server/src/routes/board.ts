@@ -54,9 +54,11 @@ router.get("/leagues/:leagueId/events/:eventId/board", async (req, res): Promise
         hasSubmitted: !!sub,
         cells,
         currentPoints: 0,
-        maxPossiblePoints: isRevealed ? 0 : eventGames.length + 1, // 1 extra for money pick potential
+        maxPossiblePoints: isRevealed ? 0 : eventGames.length + 1,
         rank: 0,
         isEliminated: false,
+        tiebreakerAnswer: null as number | null,
+        moneyPickGameId: null as number | null,
       };
     }
 
@@ -91,8 +93,10 @@ router.get("/leagues/:leagueId/events/:eventId/board", async (req, res): Promise
       cells,
       currentPoints,
       maxPossiblePoints,
-      rank: 0, // will be set below
-      isEliminated: false, // will be set below
+      rank: 0,
+      isEliminated: false,
+      tiebreakerAnswer: sub.tiebreakerAnswer ?? null,
+      moneyPickGameId: sub.moneyPickGameId ?? null,
     };
   }));
 

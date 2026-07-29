@@ -1,5 +1,5 @@
 import { useParams } from "wouter";
-import { useGetPickEvent, useListEventGames, useUpdatePickEvent, useUpdateEventGame, useLockPickEvent, useFinalizePickEvent, useListNflGames, useAddEventGame, useRemoveEventGame, EventGameUpdateResult } from "@workspace/api-client-react";
+import { useGetPickEvent, useListEventGames, useUpdatePickEvent, useUpdateEventGame, useLockPickEvent, useFinalizePickEvent, useListNflGames, useAddEventGame, useRemoveEventGame, useGetLiveBoard, EventGameUpdateResult } from "@workspace/api-client-react";
 import { Shell } from "@/components/layout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -20,6 +20,7 @@ export default function EventManagement() {
 
   const { data: event, isLoading: loadingEvent } = useGetPickEvent(leagueId, eventId, { query: { enabled: !!leagueId && !!eventId } });
   const { data: eventGames, isLoading: loadingGames } = useListEventGames(leagueId, eventId, { query: { enabled: !!leagueId && !!eventId } });
+  const { data: board } = useGetLiveBoard(leagueId, eventId, { query: { enabled: !!leagueId && !!eventId } });
   
   const { data: nflGames } = useListNflGames(
     { week: event?.nflWeek, season: event?.nflSeason }, 
@@ -214,14 +215,45 @@ export default function EventManagement() {
           {event.tiebreakerQuestion && (
             <Card className="rounded-none border-border bg-card">
               <CardHeader className="bg-secondary/30 border-b border-border">
-                <CardTitle className="font-serif uppercase text-sm">Tiebreaker Result</CardTitle>
+                <CardTitle className="font-serif uppercase text-sm">Tiebreaker — Manual Commissioner Scoring</CardTitle>
               </CardHeader>
-              <CardContent className="p-4 flex gap-4 items-end">
-                <div className="flex-1 space-y-2">
-                  <label className="text-xs font-bold uppercase text-muted-foreground">{event.tiebreakerQuestion}</label>
-                  <Input type="number" value={tiebreakerResult} onChange={e => setTiebreakerResult(e.target.value)} className="rounded-none border-border font-mono text-lg max-w-[200px]" />
+              <CardContent className="p-4 space-y-6">
+                <div className="text-xs uppercase text-muted-foreground font-bold tracking-wider">{event.tiebreakerQuestion}</div>
+
+                {/* Player answers — for commissioner reference when breaking ties manually */}
+                {board?.rows && board.rows.filter(r => r.tiebreakerAnswer != null).length > 0 ? (
+                  <div className="border border-border divide-y divide-border">
+                    {board.rows
+                      .filter(r => r.hasSubmitted)
+                      .sort((a, b) => (b.tiebreakerAnswer ?? 0) - (a.tiebreakerAnswer ?? 0))
+                      .map(r => (
+                        <div key={r.userId} className="flex items-center justify-between px-4 py-2">
+                          <span className="font-bold text-sm">{r.displayName || r.userId}</span>
+                          <span className="font-mono font-black text-lg">
+                            {r.tiebreakerAnswer ?? "—"}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                ) : (
+                  <div className="text-xs text-muted-foreground italic">No submissions yet.</div>
+                )}
+
+                {/* Correct answer field — optional reference stored for the board display */}
+                <div className="flex gap-4 items-end pt-2 border-t border-border">
+                  <div className="flex-1 space-y-1">
+                    <label className="text-xs font-bold uppercase text-muted-foreground">Correct Answer (for board display)</label>
+                    <Input
+                      type="number"
+                      value={tiebreakerResult}
+                      onChange={e => setTiebreakerResult(e.target.value)}
+                      className="rounded-none border-border font-mono text-lg max-w-[200px]"
+                      placeholder="e.g. 47"
+                    />
+                  </div>
+                  <Button className="rounded-none uppercase font-bold" onClick={handleSaveTiebreaker}>Save</Button>
                 </div>
-                <Button className="rounded-none uppercase font-bold" onClick={handleSaveTiebreaker}>Save</Button>
+                <p className="text-xs text-muted-foreground">Standings rank is based on points only. You decide who wins in a tie — review the answers above and apply the result manually.</p>
               </CardContent>
             </Card>
           )}

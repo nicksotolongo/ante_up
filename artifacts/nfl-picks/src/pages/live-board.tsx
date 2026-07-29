@@ -72,6 +72,11 @@ export default function LiveBoardPage() {
                         </div>
                       </th>
                     ))}
+                    {event.tiebreakerQuestion && (
+                      <th className="p-2 text-center font-bold uppercase tracking-wider text-[10px] border-l border-border bg-secondary/50 w-16 hidden sm:table-cell">
+                        TB
+                      </th>
+                    )}
                     <th className="p-3 text-center font-bold uppercase tracking-wider text-[10px] border-l-2 border-foreground sticky right-0 z-10 bg-secondary/90 w-16">
                       Pts
                     </th>
@@ -127,6 +132,11 @@ export default function LiveBoardPage() {
                       <td className="p-2 text-center font-mono font-black border-l-2 border-foreground sticky right-0 z-10 bg-card text-lg">
                         {row.currentPoints}
                       </td>
+                      {event.tiebreakerQuestion && (
+                        <td className="p-2 text-center font-mono text-muted-foreground border-l border-border hidden sm:table-cell">
+                          {row.tiebreakerAnswer ?? "—"}
+                        </td>
+                      )}
                       <td className="p-2 text-center font-mono text-muted-foreground border-l border-border hidden sm:table-cell">
                         {row.maxPossiblePoints}
                       </td>
@@ -139,10 +149,15 @@ export default function LiveBoardPage() {
               </table>
             </div>
             
-            <div className="bg-secondary/50 p-3 border-t-2 border-foreground text-xs font-mono flex items-center justify-between">
-              <div>Tiebreaker: {event.tiebreakerQuestion || 'None'}</div>
-              {event.tiebreakerResult != null && <div>Result: {event.tiebreakerResult}</div>}
-            </div>
+            {event.tiebreakerQuestion && (
+              <div className="bg-secondary/50 p-3 border-t-2 border-foreground text-xs font-mono space-y-1">
+                <div className="font-bold uppercase tracking-wider">Tiebreaker — manually scored by commissioner</div>
+                <div className="text-muted-foreground">{event.tiebreakerQuestion}</div>
+                {event.tiebreakerResult != null && (
+                  <div className="text-foreground font-bold">Answer: {event.tiebreakerResult}</div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
