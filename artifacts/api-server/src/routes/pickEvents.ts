@@ -199,6 +199,8 @@ router.post("/leagues/:leagueId/events/:eventId/finalize", async (req, res): Pro
   const games = await db.select().from(eventGamesTable).where(eq(eventGamesTable.pickEventId, eventId));
   const espnGames = await getNflGames(event.nflWeek, event.nflSeason);
 
+  let ungradedGameCount = 0;
+
   for (const eg of games) {
     // Match by ESPN ID first (games added after ESPN integration), then fall back to team names
     const espnGame =
@@ -216,7 +218,11 @@ router.post("/leagues/:leagueId/events/:eventId/finalize", async (req, res): Pro
       result = calculateAtsResult(espnGame.homeScore, espnGame.awayScore, eg.lockedSpread, eg.spreadTeam as "home" | "away");
     }
 
-    if (!result) continue; // No score available yet — skip this game
+    if (!result) {
+      // No score available yet — count as ungraded and skip
+      ungradedGameCount++;
+      continue;
+    }
 
     // Persist result + scores + finalized flag
     await db.update(eventGamesTable).set({ result, homeScore: homeScore ?? undefined, awayScore: awayScore ?? undefined, isFinalized: true }).where(eq(eventGamesTable.id, eg.id));
@@ -242,7 +248,7 @@ router.post("/leagues/:leagueId/events/:eventId/finalize", async (req, res): Pro
 
   const [updated] = await db.update(pickEventsTable).set({ status: "finalized", finalizedAt: new Date() }).where(eq(pickEventsTable.id, eventId)).returning();
   const { submissionCount, totalMembers } = await getEventCounts(eventId, leagueId);
-  res.json(formatEvent(updated, submissionCount, totalMembers));
+  res.json({ ...formatEvent(updated, submissionCount, totalMembers), ungradedGameCount });
 });
 
 export default router;

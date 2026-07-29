@@ -211,9 +211,19 @@ router.delete("/leagues/:leagueId/events/:eventId/games/:eventGameId", async (re
   if (!event) { res.status(404).json({ error: "Event not found" }); return; }
   if (event.status !== "draft") { res.status(400).json({ error: "Cannot remove games from a published event" }); return; }
 
-  await db
-    .delete(eventGamesTable)
+  // Verify the event game actually belongs to this event before touching any picks
+  const [eg] = await db
+    .select()
+    .from(eventGamesTable)
     .where(and(eq(eventGamesTable.id, eventGameId), eq(eventGamesTable.pickEventId, eventId)));
+  if (!eg) { res.status(404).json({ error: "Event game not found" }); return; }
+
+  // Cascade-delete picks then the game atomically so a partial failure leaves no orphans
+  await db.transaction(async (tx) => {
+    await tx.delete(picksTable).where(eq(picksTable.eventGameId, eventGameId));
+    await tx.delete(eventGamesTable).where(eq(eventGamesTable.id, eventGameId));
+  });
+
   res.sendStatus(204);
 });
 
