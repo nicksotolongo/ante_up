@@ -25,6 +25,38 @@ async function requireMember(leagueId: number, userId: string) {
   return m ?? null;
 }
 
+/** Validates a pick set against the event game list. Returns an error string or null on success. */
+function validatePicksAgainstGames(
+  picks: { eventGameId: number; selectedTeam: string }[],
+  moneyPickGameId: number,
+  tiebreakerAnswer: number | null | undefined,
+  eventGames: typeof eventGamesTable.$inferSelect[],
+  tiebreakerQuestion: string | null | undefined,
+): string | null {
+  // No duplicate game IDs
+  const pickedIds = picks.map(p => p.eventGameId);
+  if (new Set(pickedIds).size !== pickedIds.length) return "Duplicate game IDs in picks";
+
+  // Exact game set — no missing, no extras
+  if (picks.length !== eventGames.length) return `Expected ${eventGames.length} picks, got ${picks.length}`;
+
+  const gameMap = new Map(eventGames.map(g => [g.id, g]));
+  for (const pick of picks) {
+    const game = gameMap.get(pick.eventGameId);
+    if (!game) return `Pick references unknown game ${pick.eventGameId}`;
+    if (pick.selectedTeam !== game.homeTeam && pick.selectedTeam !== game.awayTeam)
+      return `Invalid team "${pick.selectedTeam}" for game ${pick.eventGameId} (${game.awayTeam} @ ${game.homeTeam})`;
+  }
+
+  // Money pick must be one of the submitted games
+  if (!new Set(pickedIds).has(moneyPickGameId)) return "Money pick must be one of your selected games";
+
+  // Tiebreaker required if question is set
+  if (tiebreakerQuestion && tiebreakerAnswer == null) return "Tiebreaker answer required";
+
+  return null;
+}
+
 function formatPick(pick: typeof picksTable.$inferSelect) {
   return {
     id: pick.id,
@@ -153,24 +185,9 @@ router.post("/leagues/:leagueId/events/:eventId/submissions", async (req, res): 
 
   const { picks, moneyPickGameId, tiebreakerAnswer } = parsed.data;
 
-  // Validate: all event games must be covered
   const eventGames = await db.select().from(eventGamesTable).where(eq(eventGamesTable.pickEventId, eventId));
-  const pickedGameIds = new Set(picks.map((p) => p.eventGameId));
-  for (const eg of eventGames) {
-    if (!pickedGameIds.has(eg.id)) {
-      res.status(400).json({ error: `Missing pick for game ${eg.id}` }); return;
-    }
-  }
-
-  // Validate money pick
-  if (!pickedGameIds.has(moneyPickGameId)) {
-    res.status(400).json({ error: "Money pick must be one of your selected games" }); return;
-  }
-
-  // Validate tiebreaker
-  if (event.tiebreakerQuestion && tiebreakerAnswer == null) {
-    res.status(400).json({ error: "Tiebreaker answer required" }); return;
-  }
+  const validationError = validatePicksAgainstGames(picks, moneyPickGameId, tiebreakerAnswer, eventGames, event.tiebreakerQuestion);
+  if (validationError) { res.status(400).json({ error: validationError }); return; }
 
   const [sub] = await db.insert(submissionsTable).values({
     pickEventId: eventId,
@@ -214,10 +231,16 @@ router.patch("/leagues/:leagueId/events/:eventId/submissions/:submissionId", asy
 
   const { picks, moneyPickGameId, tiebreakerAnswer } = parsed.data;
 
-  // Delete old picks and re-insert
-  await db.delete(picksTable).where(eq(picksTable.submissionId, submissionId));
-  await db.update(submissionsTable).set({ moneyPickGameId, tiebreakerAnswer }).where(eq(submissionsTable.id, submissionId));
-  await db.insert(picksTable).values(picks.map((p) => ({ submissionId, eventGameId: p.eventGameId, selectedTeam: p.selectedTeam })));
+  const eventGames = await db.select().from(eventGamesTable).where(eq(eventGamesTable.pickEventId, eventId));
+  const validationError = validatePicksAgainstGames(picks, moneyPickGameId, tiebreakerAnswer, eventGames, event.tiebreakerQuestion);
+  if (validationError) { res.status(400).json({ error: validationError }); return; }
+
+  // Atomic update: delete + update + re-insert in one transaction to prevent pick loss on failure
+  await db.transaction(async (tx) => {
+    await tx.delete(picksTable).where(eq(picksTable.submissionId, submissionId));
+    await tx.update(submissionsTable).set({ moneyPickGameId, tiebreakerAnswer }).where(eq(submissionsTable.id, submissionId));
+    await tx.insert(picksTable).values(picks.map((p) => ({ submissionId, eventGameId: p.eventGameId, selectedTeam: p.selectedTeam })));
+  });
 
   const [updatedSub] = await db.select().from(submissionsTable).where(eq(submissionsTable.id, submissionId));
   const updatedPicks = await db.select().from(picksTable).where(eq(picksTable.submissionId, submissionId));

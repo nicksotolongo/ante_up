@@ -1,0 +1,69 @@
+Important issues I found
+
+1. Submission validation has a security/data-integrity gap
+
+When submitting picks, the API checks that every event game was selected—but it does not clearly reject extra picks belonging to another event, duplicate game IDs, or invalid selected-team values against the actual home and away teams.  
+
+The update endpoint is weaker: it deletes the existing picks and reinserts the new picks without repeating the full event-game, money-pick, or tiebreaker validation.  
+
+This should be fixed before real league play.
+
+2. Updating picks is not atomic
+
+The update performs:
+
+1. Delete old picks
+2. Update submission
+3. Insert replacement picks
+
+Those operations are not wrapped in a database transaction. If the insert fails, the player could lose all previous picks.  
+
+It should be one transaction.
+
+3. The live-board elimination calculation is too simplistic
+
+A player is marked eliminated when the leader’s current score exceeds that player’s maximum possible score.  
+
+That sounds reasonable, but it ignores:
+
+* Opposing picks among remaining games
+* Whether the current leader can also gain points
+* Tiebreaker possibilities
+* Ties for first
+* Shared outcomes where multiple players cannot independently reach their theoretical maximum
+
+It is a useful estimate, but it is not yet true mathematical elimination.
+
+4. Rankings do not handle ties
+
+Ranks are assigned using array position: first row is rank 1, second row rank 2, and so on. Two players with equal points will still receive different ranks.  
+
+The final ranking should account for:
+
+* Total points
+* Tiebreaker result
+* Equal-score ties
+* Possibly the money-pick rule, depending on your league rules
+
+5. Reveal security is mostly handled correctly
+
+Before reveal, the submissions endpoint returns only the number of players who submitted, not their picks. After reveal, it returns the full submissions.  
+
+The board endpoint also blanks picks until the event is revealed or the reveal time has passed.  
+
+That is good. Hidden picks are being protected by the server, rather than merely hidden in the browser.
+
+6. Push scoring needs confirmation
+
+The code awards:
+
+* 0.5 points for a normal push
+* 1 point for a money-pick push  
+
+That may be exactly what you want, but we should confirm it. Many pools treat a push as zero, a half-win, or remove that game from scoring.
+
+7. Live scores are not truly automatic yet
+
+The event-game API can store scores and calculate ATS results, but the reviewed route appears to rely on an update request to enter or refresh those scores. Once finalized, it grades every player’s pick.  
+
+I have not yet seen evidence of a scheduled job that automatically polls ESPN during games. So “live board” currently appears to mean the board updates from stored scores—not necessarily that those scores update automatically without a commissioner action.

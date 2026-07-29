@@ -93,7 +93,9 @@ router.get("/leagues/:leagueId/standings", async (req, res): Promise<void> => {
   });
 
   standings.sort((a, b) => b.totalPoints - a.totalPoints);
-  standings.forEach((s, i) => { s.rank = i + 1; });
+  standings.forEach((s, i) => {
+    s.rank = i > 0 && s.totalPoints === standings[i - 1].totalPoints ? standings[i - 1].rank : i + 1;
+  });
   res.json(standings);
 });
 
@@ -165,10 +167,9 @@ router.get("/leagues/:leagueId/events/:eventId/standings", async (req, res): Pro
 
   standings.sort((a, b) => b.points - a.points);
 
-  // Mark eliminated: maxPossible < leader's current points
   const leaderPoints = standings[0]?.points ?? 0;
   standings.forEach((s, i) => {
-    s.rank = i + 1;
+    s.rank = i > 0 && s.points === standings[i - 1].points ? standings[i - 1].rank : i + 1;
     s.isEliminated = s.maxPossible < leaderPoints;
   });
 
