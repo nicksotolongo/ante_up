@@ -135,7 +135,7 @@ router.get("/leagues/:leagueId/events/:eventId/standings", async (req, res): Pro
     const base = { userId: m.userId, displayName, profileImageUrl: m.profileImageUrl ?? null };
 
     if (!sub) {
-      return { ...base, points: 0, maxPossible: 0, normalCorrect: 0, normalTotal: 0, moneyCorrect: 0, moneyTotal: 0, tiebreakerAnswer: null, isEliminated: false, rank: 0 };
+      return { ...base, submitted: false, points: 0, maxPossible: 0, normalCorrect: 0, normalTotal: 0, moneyCorrect: 0, moneyTotal: 0, tiebreakerAnswer: null, isEliminated: false, rank: 0 };
     }
 
     const picks = allPicks.filter(p => p.submissionId === sub.id);
@@ -153,6 +153,7 @@ router.get("/leagues/:leagueId/events/:eventId/standings", async (req, res): Pro
 
     return {
       ...base,
+      submitted: true,
       points,
       maxPossible,
       normalCorrect: normalPicks.filter(p => p.result === "win").length,
@@ -165,12 +166,17 @@ router.get("/leagues/:leagueId/events/:eventId/standings", async (req, res): Pro
     };
   });
 
-  standings.sort((a, b) => b.points - a.points);
+  // Submitted players first (by points desc), then DNS players after
+  standings.sort((a, b) => {
+    if (a.submitted !== b.submitted) return a.submitted ? -1 : 1;
+    return b.points - a.points;
+  });
 
+  // Mark eliminated: maxPossible < leader's current points (only for submitted players)
   const leaderPoints = standings[0]?.points ?? 0;
   standings.forEach((s, i) => {
-    s.rank = i > 0 && s.points === standings[i - 1].points ? standings[i - 1].rank : i + 1;
-    s.isEliminated = s.maxPossible < leaderPoints;
+    s.rank = i > 0 && s.submitted && s.points === standings[i - 1].points ? standings[i - 1].rank : i + 1;
+    s.isEliminated = s.submitted && s.maxPossible < leaderPoints;
   });
 
   res.json(standings);

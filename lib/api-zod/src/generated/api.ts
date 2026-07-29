@@ -616,7 +616,7 @@ export const RemoveEventGameParams = zod.object({
 })
 
 export const RemoveEventGameResponse = zod.object({
-  deletedPicksCount: zod.number()
+  "deletedPicksCount": zod.number()
 })
 
 
@@ -876,7 +876,8 @@ export const GetEventStandingsResponseItem = zod.object({
   "moneyTotal": zod.number(),
   "rank": zod.number(),
   "isEliminated": zod.boolean(),
-  "tiebreakerAnswer": zod.number().nullable()
+  "tiebreakerAnswer": zod.number().nullable(),
+  "submitted": zod.boolean()
 })
 export const GetEventStandingsResponse = zod.array(GetEventStandingsResponseItem)
 

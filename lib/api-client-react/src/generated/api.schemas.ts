@@ -5,6 +5,10 @@
  * NFL Picks League API
  * OpenAPI spec version: 0.1.0
  */
+export interface RemoveEventGameResult {
+  deletedPicksCount: number;
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -281,6 +285,17 @@ export const EventGameUpdateResult = {
   push: 'push',
 } as const;
 
+/**
+ * @nullable
+ */
+export type EventGameUpdateSpreadTeam = typeof EventGameUpdateSpreadTeam[keyof typeof EventGameUpdateSpreadTeam] | null;
+
+
+export const EventGameUpdateSpreadTeam = {
+  home: 'home',
+  away: 'away',
+} as const;
+
 export interface EventGameUpdate {
   /** @nullable */
   result?: EventGameUpdateResult;
@@ -292,7 +307,7 @@ export interface EventGameUpdate {
   /** @nullable */
   lockedSpread?: number | null;
   /** @nullable */
-  spreadTeam?: 'home' | 'away' | null;
+  spreadTeam?: EventGameUpdateSpreadTeam;
 }
 
 export type PickSelectedTeam = typeof PickSelectedTeam[keyof typeof PickSelectedTeam];
@@ -484,6 +499,7 @@ export interface EventStandingEntry {
   isEliminated: boolean;
   /** @nullable */
   tiebreakerAnswer: number | null;
+  submitted: boolean;
 }
 
 export interface DashboardEvent {

@@ -48,6 +48,7 @@ import type {
   PickEvent,
   PickEventInput,
   PickEventUpdate,
+  RemoveEventGameResult,
   StandingEntry,
   Submission,
   SubmissionEnvelope,
@@ -2012,9 +2013,9 @@ export const getRemoveEventGameUrl = (leagueId: number,
  */
 export const removeEventGame = async (leagueId: number,
     eventId: number,
-    eventGameId: number, options?: Parameters<typeof customFetch>[1]): Promise<{ deletedPicksCount: number }> => {
+    eventGameId: number, options?: Parameters<typeof customFetch>[1]): Promise<RemoveEventGameResult> => {
 
-  return customFetch<{ deletedPicksCount: number }>(getRemoveEventGameUrl(leagueId,eventId,eventGameId),
+  return customFetch<RemoveEventGameResult>(getRemoveEventGameUrl(leagueId,eventId,eventGameId),
   {
     ...options,
     method: 'DELETE'

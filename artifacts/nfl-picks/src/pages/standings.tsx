@@ -154,34 +154,60 @@ function WeeklyStandings({ leagueId }: { leagueId: number }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {standings.map((entry) => (
-                <TableRow
-                  key={entry.userId}
-                  className={`hover:bg-muted/30 ${entry.rank === 1 ? "bg-yellow-50/30 dark:bg-yellow-900/10" : ""}`}
-                >
-                  <TableCell className="text-center"><RankBadge rank={entry.rank} /></TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Avatar name={entry.displayName} />
-                      <span className="font-bold">{entry.displayName || "Unknown"}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right font-mono font-black text-lg tabular-nums">
-                    {entry.points}
-                  </TableCell>
-                  <TableCell className="text-right font-mono text-muted-foreground text-sm tabular-nums hidden sm:table-cell">
-                    {entry.maxPossible}
-                  </TableCell>
-                  <TableCell className="text-right font-mono">
-                    <span className="text-pick-win">{entry.normalCorrect}</span>
-                    <span className="text-muted-foreground">-</span>
-                    <span className="text-pick-loss">{(entry.normalTotal ?? 0) - (entry.normalCorrect ?? 0)}</span>
-                  </TableCell>
-                  <TableCell className="text-right font-mono text-sm hidden sm:table-cell">
-                    {entry.moneyCorrect}/{entry.moneyTotal}
-                  </TableCell>
-                </TableRow>
-              ))}
+              {standings.map((entry) => {
+                const dns = !entry.submitted;
+                return (
+                  <TableRow
+                    key={entry.userId}
+                    className={[
+                      "hover:bg-muted/30",
+                      dns ? "opacity-50" : "",
+                      !dns && entry.rank === 1 ? "bg-yellow-50/30 dark:bg-yellow-900/10" : "",
+                    ].join(" ")}
+                  >
+                    <TableCell className="text-center">
+                      {dns ? (
+                        <span className="font-mono text-xs text-muted-foreground">—</span>
+                      ) : (
+                        <RankBadge rank={entry.rank} />
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Avatar name={entry.displayName} />
+                        <span className={`font-bold ${dns ? "italic text-muted-foreground" : ""}`}>
+                          {entry.displayName || "Unknown"}
+                        </span>
+                        {dns && (
+                          <span className="text-[10px] font-black uppercase tracking-widest bg-muted text-muted-foreground px-1.5 py-0.5 rounded-none">
+                            DNS
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right font-mono font-black text-lg tabular-nums">
+                      {dns ? <span className="text-muted-foreground text-sm font-normal">—</span> : entry.points}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-muted-foreground text-sm tabular-nums hidden sm:table-cell">
+                      {dns ? "—" : entry.maxPossible}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      {dns ? (
+                        <span className="text-muted-foreground text-sm">—</span>
+                      ) : (
+                        <>
+                          <span className="text-pick-win">{entry.normalCorrect}</span>
+                          <span className="text-muted-foreground">-</span>
+                          <span className="text-pick-loss">{(entry.normalTotal ?? 0) - (entry.normalCorrect ?? 0)}</span>
+                        </>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-sm hidden sm:table-cell">
+                      {dns ? "—" : `${entry.moneyCorrect}/${entry.moneyTotal}`}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>

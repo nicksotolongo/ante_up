@@ -1389,7 +1389,7 @@ components:
 
     EventStandingEntry:
       type: object
-      required: [userId, displayName, profileImageUrl, points, maxPossible, normalCorrect, normalTotal, moneyCorrect, moneyTotal, rank, isEliminated, tiebreakerAnswer]
+      required: [userId, displayName, profileImageUrl, points, maxPossible, normalCorrect, normalTotal, moneyCorrect, moneyTotal, rank, isEliminated, tiebreakerAnswer, submitted]
       properties:
         userId:
           type: string
@@ -1415,6 +1415,8 @@ components:
           type: boolean
         tiebreakerAnswer:
           type: ["number", "null"]
+        submitted:
+          type: boolean
 
     # ── Dashboard ─────────────────────────────────────────────────────────────
     Dashboard:

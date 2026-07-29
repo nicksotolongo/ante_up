@@ -22,4 +22,5 @@ export interface EventStandingEntry {
   isEliminated: boolean;
   /** @nullable */
   tiebreakerAnswer: number | null;
+  submitted: boolean;
 }

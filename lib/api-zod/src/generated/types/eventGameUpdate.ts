@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EventGameUpdateResult } from './eventGameUpdateResult';
+import type { EventGameUpdateSpreadTeam } from './eventGameUpdateSpreadTeam';
 
 export interface EventGameUpdate {
   /** @nullable */
@@ -15,4 +16,8 @@ export interface EventGameUpdate {
   /** @nullable */
   awayScore?: number | null;
   isFinalized?: boolean;
+  /** @nullable */
+  lockedSpread?: number | null;
+  /** @nullable */
+  spreadTeam?: EventGameUpdateSpreadTeam;
 }
