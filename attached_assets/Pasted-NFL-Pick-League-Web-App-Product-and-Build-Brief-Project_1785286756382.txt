@@ -1,0 +1,842 @@
+NFL Pick League Web App — Product and Build Brief
+
+Project Summary
+
+Build a mobile-first web application for a private NFL against-the-spread picks league.
+
+The app will be used primarily on iPads and phones. It should be simple, fast, low-fidelity visually, and easy for nontechnical users.
+
+The main experience is a live weekly picks board where league members can see everyone’s selections, current scores, remaining possible points, and mathematical elimination status after picks are revealed.
+
+The app should support multiple leagues, even though the initial version will be used by one league of approximately 8–10 people.
+
+⸻
+
+Core League Rules
+
+Each league has three possible member roles:
+
+* Commissioner
+* Deputy commissioner
+* Player
+
+The deputy commissioner role should exist in the data model, but the app should automate most deputy commissioner responsibilities.
+
+Each league season consists of NFL weeks.
+
+Within each NFL week, the commissioner creates separate pick events. A pick event may happen on:
+
+* Thursday
+* Sunday
+* Monday
+* Thanksgiving
+* Christmas
+* Playoff days
+* Any other day with NFL games
+
+Do not hard-code events as Thursday, Sunday, or Monday. Treat every publication as a generic “Pick Event.”
+
+Examples:
+
+* Thursday Night Pick Event
+* Sunday Main Slate
+* Monday Night Pick Event
+
+⸻
+
+Pick Event Workflow
+
+1. Live odds feed
+
+The commissioner dashboard should display available NFL games from a sports odds API.
+
+For each game, show:
+
+* Away team
+* Home team
+* Kickoff date and time
+* Current point spread
+* Team favored
+* Last updated time
+* Game status
+
+The commissioner selects which games the league will pick.
+
+The typical event will contain:
+
+* One Thursday game
+* Approximately six Sunday games
+* One Monday game
+
+The number of games should remain flexible.
+
+2. Locking lines
+
+When the commissioner clicks “Lock Lines and Send”:
+
+* Save the exact spread shown at that moment.
+* Save the timestamp when the line was locked.
+* Prevent the locked line from changing even if the live market moves afterward.
+* Open the event for player submissions.
+* Send a notification to all league members.
+* Record the commissioner action in an audit log.
+
+Suggested notification:
+
+“Picks are live. Lines are locked. Make your selections, choose your money pick, and submit your tiebreaker.”
+
+3. Submission deadline
+
+The commissioner should set:
+
+* Submission deadline
+* Reveal time
+
+These will usually be the same as the kickoff of the earliest game in the event.
+
+Players may edit their picks until the submission deadline.
+
+Once the deadline passes:
+
+* Picks become locked.
+* Players cannot edit them.
+* The server, not the browser, must enforce the deadline.
+
+4. Hidden picks
+
+Before the reveal time:
+
+* Players may only see their own picks.
+* Players may see how many league members have submitted.
+* Players must not be able to retrieve anyone else’s picks through the browser, API, or database queries.
+* The commissioner may see who submitted, but should not see the actual selections before reveal.
+
+Display something like:
+
+“8 of 10 players submitted.”
+
+5. Reveal behavior
+
+At the reveal time:
+
+* Reveal every player’s picks for the entire pick event.
+* For a Sunday event, reveal all Sunday picks together at the kickoff of the earliest Sunday game, usually 1:00 p.m. Eastern.
+* Do not reveal each game separately unless a future league setting enables that behavior.
+
+⸻
+
+Player Pick Experience
+
+Each player should see the locked games in a clean list.
+
+For every game, the player selects one side against the spread.
+
+Example:
+
+Buffalo -3.5
+Miami +3.5
+
+Each player must also:
+
+* Choose exactly one money pick.
+* Enter the tiebreaker answer.
+* Submit all selections.
+
+Money pick
+
+The money pick is worth:
+
+* 2 points if correct
+* 0 points if incorrect
+
+All normal picks are worth:
+
+* 1 point if correct
+* 0 points if incorrect
+
+Clearly mark the money pick with a star or “2X” indicator.
+
+Prevent submission unless:
+
+* Every game has a selection.
+* Exactly one money pick is selected.
+* The tiebreaker answer is entered.
+
+After submission, show:
+
+* Submitted status
+* Submission timestamp
+* Ability to edit before deadline
+* Clear locked status after deadline
+
+⸻
+
+Tiebreaker
+
+Each pick event may contain one numeric tiebreaker question.
+
+Example:
+
+“Total combined points in Sunday Night Football?”
+
+The commissioner enters the question when creating the event.
+
+Players enter a numeric answer.
+
+The tiebreaker is only used when two or more players finish the event with the same number of points.
+
+The closest answer wins.
+
+The commissioner should be able to enter the official result manually or have it derived from game data when possible.
+
+Define a secondary rule for equal tiebreaker distances:
+
+* Lower answer wins, or
+* Commissioner decides
+
+For the first version, use “lower answer wins” and make this visible in the rules.
+
+⸻
+
+Live Weekly Board
+
+The live board is the most important screen in the application.
+
+After reveal, show a grid with:
+
+* Players as rows
+* Games as columns
+* Each player’s selected team in the cells
+* Money picks clearly marked
+* Current points
+* Maximum possible points
+* Remaining games
+* Current rank
+* Elimination status
+
+Use simple cell states:
+
+* Gray: game pending
+* Green: pick won
+* Red: pick lost
+* Bold or star: money pick
+
+Live scoring
+
+Game scores and final results should update from a sports data API.
+
+The app should determine which side covered the locked spread.
+
+Important:
+
+* Grade picks using the locked spread, not the current live spread.
+* Support pushes.
+* For version one, a push should award 0.5 points for a normal pick and 1 point for a money pick, unless configured otherwise.
+* Make push scoring configurable later.
+
+Maximum possible score
+
+For each player calculate:
+
+Current points + points still available from pending games
+
+Display this as “Max.”
+
+Mathematical elimination
+
+Mark a player as eliminated when their maximum possible score is lower than another player’s already secured score.
+
+Example:
+
+* Player A currently has 7 points.
+* Player B has 4 points with only 2 possible points remaining.
+* Player B is mathematically eliminated.
+
+The elimination calculation should update whenever a game is graded.
+
+Do not mark someone eliminated if a tiebreaker could still affect a tie at the top.
+
+Scenario view
+
+Add a simple expandable “What I Need” section for each player.
+
+Examples:
+
+* “You need Kansas City and Pittsburgh to cover.”
+* “You need Dana’s money pick to lose.”
+* “You are guaranteed at least second place.”
+* “You are eliminated.”
+
+This may be added after the first working version of the live board.
+
+⸻
+
+Commissioner Dashboard
+
+The commissioner dashboard should contain:
+
+Current event
+
+* Event name
+* Event status
+* Number of selected games
+* Submission deadline
+* Reveal time
+* Submission count
+* Notification status
+
+Odds feed
+
+* All upcoming NFL games
+* Current spreads
+* Kickoff times
+* Refresh button
+* Selection checkboxes
+* Last updated timestamp
+
+Event creation form
+
+Fields:
+
+* Event name
+* NFL season
+* NFL week
+* Selected games
+* Submission deadline
+* Reveal time
+* Tiebreaker question
+* Optional notes
+
+Buttons:
+
+* Save Draft
+* Preview
+* Lock Lines and Send
+* Cancel Event
+
+Submission monitoring
+
+Before reveal, show:
+
+* Player name
+* Submitted or not submitted
+* Submission timestamp
+* Notification delivery status
+
+Do not show actual selections before reveal.
+
+Result controls
+
+Allow the commissioner to:
+
+* View automated results
+* Manually correct a game result
+* Enter the official tiebreaker result
+* Finalize the event
+* Reopen an event only with a visible audit log entry
+
+⸻
+
+Season Standings
+
+Create a season standings page showing:
+
+* Rank
+* Player name
+* Total points
+* Weekly wins
+* Normal pick record
+* Money pick record
+* Money pick percentage
+* Events entered
+* Tiebreaker wins
+
+Allow viewing standings by:
+
+* Entire season
+* Individual week
+* Individual pick event
+
+⸻
+
+Season Analytics
+
+Create a player analytics page.
+
+For each player track:
+
+* Most-picked NFL team
+* Least-picked NFL team
+* Best-performing team picked
+* Worst-performing team picked
+* Team the player is wrong about most often
+* Favorite team to pick as an underdog
+* Favorite team to pick as a favorite
+* Normal pick percentage
+* Money pick percentage
+* Current winning streak
+* Current losing streak
+* Best week
+* Worst week
+* Average weekly points
+
+League-wide analytics:
+
+* Most popular team
+* Least popular team
+* Best money-pick player
+* Most contrarian player
+* Most unanimous pick
+* Biggest upset pick
+* Closest weekly finish
+
+These analytics can be introduced after the core app works.
+
+⸻
+
+Authentication and Accounts
+
+Use secure user authentication.
+
+Preferred options:
+
+* Email magic link
+* Email and password
+* Google login
+
+Each user should have:
+
+* Display name
+* Email
+* Avatar or initials
+* Time zone
+* League memberships
+* Role in each league
+
+The same user may belong to multiple leagues.
+
+⸻
+
+League Management
+
+The app should support multiple leagues.
+
+Each league should have:
+
+* Name
+* Unique URL slug
+* Commissioner
+* Optional deputy commissioner
+* Players
+* Season
+* League rules
+* Invite code or invite link
+
+Example URL:
+
+/league/office-pickem
+
+Commissioner controls:
+
+* Invite players
+* Remove players
+* Assign deputy commissioner
+* Transfer commissioner role
+* Configure scoring rules
+* Start a new season
+* Archive a league
+
+⸻
+
+Notifications
+
+The system should support:
+
+* Email notifications
+* In-app notifications
+* Push notifications later
+
+Required notifications:
+
+* Pick event published
+* Submission reminder
+* Picks locking soon
+* Picks revealed
+* Event finalized
+* Weekly winner announced
+
+Suggested reminder timing:
+
+* One hour before the deadline
+* Fifteen minutes before the deadline
+
+Do not repeatedly notify players who already submitted unless their picks become invalid due to an administrative change.
+
+⸻
+
+Time Zones
+
+Store all dates and times in UTC.
+
+Display times in the user’s selected time zone.
+
+Default league display may use Eastern Time because NFL schedules are commonly communicated that way.
+
+Clearly show the time zone beside deadlines and kickoffs.
+
+⸻
+
+Data Model
+
+Create database tables similar to the following.
+
+users or profiles
+
+* id
+* display_name
+* email
+* avatar_url
+* time_zone
+* created_at
+
+leagues
+
+* id
+* name
+* slug
+* commissioner_id
+* current_season_id
+* created_at
+
+league_members
+
+* id
+* league_id
+* user_id
+* role
+* status
+* joined_at
+
+seasons
+
+* id
+* league_id
+* nfl_year
+* name
+* status
+* starts_at
+* ends_at
+
+nfl_games
+
+* id
+* provider_game_id
+* season
+* week
+* kickoff_at
+* away_team
+* home_team
+* away_score
+* home_score
+* game_status
+* updated_at
+
+pick_events
+
+* id
+* league_id
+* season_id
+* nfl_week
+* name
+* status
+* submission_deadline
+* reveal_at
+* tiebreaker_question
+* tiebreaker_result
+* created_by
+* created_at
+* published_at
+* finalized_at
+
+event_games
+
+* id
+* pick_event_id
+* nfl_game_id
+* spread_team
+* locked_spread
+* locked_at
+* provider
+* display_order
+
+submissions
+
+* id
+* pick_event_id
+* user_id
+* money_pick_game_id
+* tiebreaker_answer
+* submitted_at
+* updated_at
+* locked_at
+
+picks
+
+* id
+* submission_id
+* event_game_id
+* selected_team
+* result
+* points_awarded
+
+notifications
+
+* id
+* user_id
+* league_id
+* pick_event_id
+* type
+* status
+* sent_at
+* read_at
+
+audit_logs
+
+* id
+* league_id
+* actor_user_id
+* action
+* entity_type
+* entity_id
+* metadata
+* created_at
+
+⸻
+
+Security Requirements
+
+Security is critical because picks must stay hidden.
+
+Implement:
+
+* Server-side authentication
+* Row-level database security
+* Server-side submission deadlines
+* Server-side reveal rules
+* Protected commissioner actions
+* Audit logs
+* Validation of every pick submission
+
+Before reveal:
+
+* A player may read only their own submission.
+* The commissioner may read submission status but not selections.
+* No browser API response should include other players’ picks.
+
+After reveal:
+
+* League members may read all submissions for that event.
+
+Never rely only on hiding elements in the user interface.
+
+⸻
+
+Sports Data Integration
+
+Create an abstraction layer for the sports data provider.
+
+The app will eventually need:
+
+* NFL schedule
+* Kickoff times
+* Team names
+* Live scores
+* Final scores
+* Point spreads
+* Odds update timestamps
+* Game status
+
+Do not tightly couple the application to one provider.
+
+Create functions such as:
+
+* getUpcomingNFLGames()
+* getCurrentOdds(gameId)
+* getLiveScores()
+* getFinalGameResult(gameId)
+* calculateATSResult(gameId, lockedSpread)
+
+For the first version, use mock data behind the same interface.
+
+Add clear environment variables for the future API key.
+
+⸻
+
+Visual Design
+
+Keep the interface intentionally low-fidelity.
+
+Style direction:
+
+* Clean
+* Functional
+* Minimal
+* Mobile-first
+* Table and grid based
+* No unnecessary animation
+* No sportsbook-style gambling imagery
+* No glossy gradients
+* No complex illustrations
+
+Suggested colors:
+
+* White or light gray background
+* Dark text
+* Gray borders
+* Green for correct picks
+* Red for incorrect picks
+* Gray for pending picks
+* One neutral accent color
+
+Use large touch targets suitable for iPad.
+
+The live board may scroll horizontally on small screens.
+
+Keep important player names and score totals visible while scrolling when possible.
+
+⸻
+
+Main Screens
+
+Build these screens:
+
+1. Login
+2. League selection
+3. League dashboard
+4. Commissioner odds feed
+5. Create pick event
+6. Player picks form
+7. Submission confirmation
+8. Pre-reveal submission counter
+9. Live board
+10. Season standings
+11. Player analytics
+12. League settings
+13. Invite players
+14. Event history
+
+⸻
+
+Demo Data
+
+Seed the app with:
+
+* One league
+* Eight players
+* One commissioner
+* One deputy commissioner
+* Six NFL games
+* One Sunday pick event
+* Eight completed submissions
+* One money pick per player
+* Two completed game results
+* Four pending game results
+
+The demo should make the live board useful immediately.
+
+⸻
+
+Suggested Technology
+
+Use:
+
+* Next.js
+* TypeScript
+* Supabase for PostgreSQL, authentication, realtime updates, and row-level security
+* Responsive CSS
+* Vercel-compatible deployment
+* Server-side API routes or server actions
+* A provider adapter for NFL odds and scores
+
+The project must be easy to develop and deploy entirely from Replit on an iPad.
+
+⸻
+
+Build Phases
+
+Phase 1 — Working foundation
+
+Build:
+
+* Authentication
+* League creation
+* League membership
+* Commissioner and player roles
+* Pick event creation
+* Mock odds feed
+* Locked spreads
+* Player submissions
+* Money picks
+* Tiebreaker
+* Submission counter
+* Secure reveal
+* Basic live board
+
+Phase 2 — Game day automation
+
+Build:
+
+* Real odds provider
+* Live scores
+* Automatic ATS grading
+* Maximum possible points
+* Mathematical elimination
+* Final event standings
+* Notifications
+
+Phase 3 — Season experience
+
+Build:
+
+* Season standings
+* Weekly winners
+* Player profiles
+* Money-pick statistics
+* Team-picking analytics
+* Event history
+* Head-to-head comparisons
+
+⸻
+
+Initial Replit Task
+
+Start by creating a working full-stack prototype for Phase 1.
+
+The prototype must:
+
+* Run inside Replit.
+* Use mock odds and game results initially.
+* Be responsive on iPad.
+* Include commissioner and player demo accounts.
+* Allow the commissioner to select games and publish a pick event.
+* Lock the spreads at publication.
+* Allow players to make and edit picks before the deadline.
+* Require one money pick.
+* Require a tiebreaker answer.
+* Hide all other players’ picks before reveal.
+* Reveal the entire event at the configured reveal time.
+* Display a live board after reveal.
+* Calculate normal and money-pick points.
+* Calculate each player’s maximum possible score.
+* Mark mathematically eliminated players.
+* Seed the app with useful demonstration data.
+
+Before generating code, provide:
+
+1. Proposed project architecture
+2. Database schema
+3. Page and component structure
+4. Security approach for hidden picks
+5. Implementation milestones
+
+Then build Phase 1 in small, testable steps.

@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "NFL Picks League"
+version = "1.0.0"
+id = "artifacts/nfl-picks"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 23623
+
+[services.development]
+run = "pnpm --filter @workspace/nfl-picks run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/nfl-picks", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/nfl-picks/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23623"
+BASE_PATH = "/"

@@ -3,20 +3,39 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: NFL Picks League API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: Auth
+    description: Authentication endpoints
+  - name: leagues
+    description: League management
+  - name: members
+    description: League membership
+  - name: nfl-games
+    description: NFL game data
+  - name: pick-events
+    description: Pick event management
+  - name: event-games
+    description: Games within a pick event
+  - name: submissions
+    description: Player pick submissions
+  - name: board
+    description: Live board
+  - name: standings
+    description: Standings
+  - name: dashboard
+    description: Dashboard
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +43,1403 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ── Auth ────────────────────────────────────────────────────────────────────
+  /auth/user:
+    get:
+      tags: [Auth]
+      operationId: getCurrentAuthUser
+      summary: Get the currently authenticated user
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      responses:
+        '200':
+          description: Auth status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthUserEnvelope'
+
+  /login:
+    get:
+      tags: [Auth]
+      operationId: beginBrowserLogin
+      summary: Start OIDC login
+      parameters:
+        - name: returnTo
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to OIDC.
+
+  /callback:
+    get:
+      tags: [Auth]
+      operationId: handleBrowserLoginCallback
+      summary: Complete OIDC login
+      parameters:
+        - name: code
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: iss
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect on success or failure.
+
+  /logout:
+    get:
+      tags: [Auth]
+      operationId: logoutBrowserSession
+      summary: Clear session
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+        - name: returnTo
+          in: query
+          required: false
+          schema:
+            type: string
+            default: /
+      responses:
+        '302':
+          description: Redirect after logout.
+
+  # ── Leagues ─────────────────────────────────────────────────────────────────
+  /leagues:
+    get:
+      operationId: listLeagues
+      tags: [leagues]
+      summary: List leagues the current user belongs to
+      responses:
+        "200":
+          description: Leagues list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/League"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    post:
+      operationId: createLeague
+      tags: [leagues]
+      summary: Create a new league
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeagueInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/League"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /leagues/join:
+    post:
+      operationId: joinLeague
+      tags: [leagues]
+      summary: Join a league via invite code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JoinLeagueInput"
+      responses:
+        "200":
+          description: Joined
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/League"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /leagues/{leagueId}:
+    get:
+      operationId: getLeague
+      tags: [leagues]
+      summary: Get league detail
+      parameters:
+        - $ref: "#/components/parameters/LeagueId"
+      responses:
+        "200":
+          description: League
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/League"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateLeague
+      tags: [leagues]
+      summary: Update league settings (commissioner only)
+      parameters:
+        - $ref: "#/components/parameters/LeagueId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeagueUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/League"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /leagues/{leagueId}/invite:
+    post:
+      operationId: generateInviteCode
+      tags: [leagues]
+      summary: Regenerate invite code (commissioner only)
+      parameters:
+        - $ref: "#/components/parameters/LeagueId"
+      responses:
+        "200":
+          description: New invite code
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InviteCode"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Members ──────────────────────────────────────────────────────────────────
+  /leagues/{leagueId}/members:
+    get:
+      operationId: listMembers
+      tags: [members]
+      summary: List league members
+      parameters:
+        - $ref: "#/components/parameters/LeagueId"
+      responses:
+        "200":
+          description: Members
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LeagueMember"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /leagues/{leagueId}/members/{userId}:
+    patch:
+      operationId: updateMember
+      tags: [members]
+      summary: Update member role (commissioner only)
+      parameters:
+        - $ref: "#/components/parameters/LeagueId"
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemberUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeagueMember"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: removeMember
+      tags: [members]
+      summary: Remove member from league (commissioner only)
+      parameters:
+        - $ref: "#/components/parameters/LeagueId"
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Removed
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── NFL Games (mock odds feed) ───────────────────────────────────────────────
+  /nfl-games:
+    get:
+      operationId: listNflGames
+      tags: [nfl-games]
+      summary: List upcoming NFL games with mock odds
+      parameters:
+        - name: week
+          in: query
+          required: false
+          schema:
+            type: number
+        - name: season
+          in: query
+          required: false
+          schema:
+            type: number
+      responses:
+        "200":
+          description: NFL games with odds
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NflGame"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /nfl-games/current-week:
+    get:
+      operationId: getCurrentNflWeek
+      tags: [nfl-games]
+      summary: Get the current NFL week and season
+      responses:
+        "200":
+          description: Current week
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentNflWeek"
+
+  # ── Pick Events ──────────────────────────────────────────────────────────────
+  /leagues/{leagueId}/events:
+    get:
+      operationId: listPickEvents
+      tags: [pick-events]
+      summary: List pick events for a league
+      parameters:
+        - $ref: "#/components/parameters/LeagueId"
+      responses:
+        "200":
+          description: Events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PickEvent"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      operationId: createPickEvent
+      tags: [pick-events]
+      summary: Create a pick event (commissioner only)
+      parameters:
+        - $ref: "#/components/parameters/LeagueId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PickEventInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PickEvent"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /leagues/{leagueId}/events/{eventId}:
+    get:
+      operationId: getPickEvent
+      tags: [pick-events]
+      summary: Get pick event detail
+      parameters:
+        - $ref: "#/components/parameters/LeagueId"
+        - $ref: "#/components/parameters/EventId"
+      responses:
+        "200":
+          description: Event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PickEvent"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updatePickEvent
+      tags: [pick-events]
+      summary: Update pick event (commissioner only)
+      parameters:
+        - $ref: "#/components/parameters/LeagueId"
+        - $ref: "#/components/parameters/EventId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PickEventUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PickEvent"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /leagues/{leagueId}/events/{eventId}/lock:
+    post:
+      operationId: lockPickEvent
+      tags: [pick-events]
+      summary: Lock lines and publish event (commissioner only)
+      parameters:
+        - $ref: "#/components/parameters/LeagueId"
+        - $ref: "#/components/parameters/EventId"
+      responses:
+        "200":
+          description: Event locked and published
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PickEvent"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /leagues/{leagueId}/events/{eventId}/finalize:
+    post:
+      operationId: finalizePickEvent
+      tags: [pick-events]
+      summary: Finalize event results (commissioner only)
+      parameters:
+        - $ref: "#/components/parameters/LeagueId"
+        - $ref: "#/components/parameters/EventId"
+      responses:
+        "200":
+          description: Event finalized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PickEvent"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Event Games ──────────────────────────────────────────────────────────────
+  /leagues/{leagueId}/events/{eventId}/games:
+    get:
+      operationId: listEventGames
+      tags: [event-games]
+      summary: List games in a pick event
+      parameters:
+        - $ref: "#/components/parameters/LeagueId"
+        - $ref: "#/components/parameters/EventId"
+      responses:
+        "200":
+          description: Event games
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EventGame"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      operationId: addEventGame
+      tags: [event-games]
+      summary: Add a game to a pick event (commissioner only)
+      parameters:
+        - $ref: "#/components/parameters/LeagueId"
+        - $ref: "#/components/parameters/EventId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventGameInput"
+      responses:
+        "201":
+          description: Game added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventGame"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /leagues/{leagueId}/events/{eventId}/games/{eventGameId}:
+    patch:
+      operationId: updateEventGame
+      tags: [event-games]
+      summary: Update event game result (commissioner only)
+      parameters:
+        - $ref: "#/components/parameters/LeagueId"
+        - $ref: "#/components/parameters/EventId"
+        - name: eventGameId
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventGameUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventGame"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: removeEventGame
+      tags: [event-games]
+      summary: Remove a game from an event (commissioner only)
+      parameters:
+        - $ref: "#/components/parameters/LeagueId"
+        - $ref: "#/components/parameters/EventId"
+        - name: eventGameId
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "204":
+          description: Removed
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Submissions ──────────────────────────────────────────────────────────────
+  /leagues/{leagueId}/events/{eventId}/my-submission:
+    get:
+      operationId: getMySubmission
+      tags: [submissions]
+      summary: Get current user's submission for an event
+      parameters:
+        - $ref: "#/components/parameters/LeagueId"
+        - $ref: "#/components/parameters/EventId"
+      responses:
+        "200":
+          description: Submission (null if not yet submitted)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubmissionEnvelope"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /leagues/{leagueId}/events/{eventId}/submissions:
+    get:
+      operationId: listSubmissions
+      tags: [submissions]
+      summary: List all submissions (after reveal) or submission count (before reveal)
+      parameters:
+        - $ref: "#/components/parameters/LeagueId"
+        - $ref: "#/components/parameters/EventId"
+      responses:
+        "200":
+          description: Submissions or count
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubmissionsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      operationId: submitPicks
+      tags: [submissions]
+      summary: Submit picks for an event
+      parameters:
+        - $ref: "#/components/parameters/LeagueId"
+        - $ref: "#/components/parameters/EventId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmissionInput"
+      responses:
+        "201":
+          description: Submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Submission"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /leagues/{leagueId}/events/{eventId}/submissions/{submissionId}:
+    patch:
+      operationId: updateSubmission
+      tags: [submissions]
+      summary: Update picks before deadline
+      parameters:
+        - $ref: "#/components/parameters/LeagueId"
+        - $ref: "#/components/parameters/EventId"
+        - name: submissionId
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmissionUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Submission"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Live Board ───────────────────────────────────────────────────────────────
+  /leagues/{leagueId}/events/{eventId}/board:
+    get:
+      operationId: getLiveBoard
+      tags: [board]
+      summary: Get live board for an event (after reveal)
+      parameters:
+        - $ref: "#/components/parameters/LeagueId"
+        - $ref: "#/components/parameters/EventId"
+      responses:
+        "200":
+          description: Live board data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LiveBoard"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Standings ────────────────────────────────────────────────────────────────
+  /leagues/{leagueId}/standings:
+    get:
+      operationId: getSeasonStandings
+      tags: [standings]
+      summary: Get season standings for a league
+      parameters:
+        - $ref: "#/components/parameters/LeagueId"
+      responses:
+        "200":
+          description: Season standings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StandingEntry"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /leagues/{leagueId}/events/{eventId}/standings:
+    get:
+      operationId: getEventStandings
+      tags: [standings]
+      summary: Get standings for a single pick event
+      parameters:
+        - $ref: "#/components/parameters/LeagueId"
+        - $ref: "#/components/parameters/EventId"
+      responses:
+        "200":
+          description: Event standings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EventStandingEntry"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Dashboard ────────────────────────────────────────────────────────────────
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [dashboard]
+      summary: Get current user dashboard
+      responses:
+        "200":
+          description: Dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dashboard"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
 components:
+  parameters:
+    AuthorizationSessionHeader:
+      name: Authorization
+      in: header
+      required: false
+      schema:
+        type: string
+    SessionCookie:
+      name: sid
+      in: cookie
+      required: false
+      schema:
+        type: string
+    LeagueId:
+      name: leagueId
+      in: path
+      required: true
+      schema:
+        type: number
+    EventId:
+      name: eventId
+      in: path
+      required: true
+      schema:
+        type: number
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
         status:
           type: string
-      required:
-        - status
 
+    ApiError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    # ── Auth ──────────────────────────────────────────────────────────────────
+    AuthUser:
+      type: object
+      required: [id, firstName, lastName, profileImageUrl]
+      properties:
+        id:
+          type: string
+        firstName:
+          type: ["string", "null"]
+        lastName:
+          type: ["string", "null"]
+        profileImageUrl:
+          type: ["string", "null"]
+        displayName:
+          type: ["string", "null"]
+
+    AuthUserEnvelope:
+      type: object
+      required: [user]
+      properties:
+        user:
+          oneOf:
+            - $ref: '#/components/schemas/AuthUser'
+            - type: 'null'
+
+    # ── Leagues ───────────────────────────────────────────────────────────────
+    League:
+      type: object
+      required: [id, name, slug, commissionerId, createdAt]
+      properties:
+        id:
+          type: number
+        name:
+          type: string
+        slug:
+          type: string
+        commissionerId:
+          type: string
+        inviteCode:
+          type: string
+        memberCount:
+          type: number
+        userRole:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    LeagueInput:
+      type: object
+      required: [name, slug]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        slug:
+          type: string
+          minLength: 1
+
+    LeagueUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+
+    JoinLeagueInput:
+      type: object
+      required: [inviteCode]
+      properties:
+        inviteCode:
+          type: string
+          minLength: 1
+
+    InviteCode:
+      type: object
+      required: [inviteCode]
+      properties:
+        inviteCode:
+          type: string
+
+    # ── Members ───────────────────────────────────────────────────────────────
+    LeagueMember:
+      type: object
+      required: [id, leagueId, userId, role, joinedAt]
+      properties:
+        id:
+          type: number
+        leagueId:
+          type: number
+        userId:
+          type: string
+        role:
+          type: string
+          enum: [commissioner, deputy, player]
+        joinedAt:
+          type: string
+          format: date-time
+        displayName:
+          type: ["string", "null"]
+        firstName:
+          type: ["string", "null"]
+        lastName:
+          type: ["string", "null"]
+        profileImageUrl:
+          type: ["string", "null"]
+
+    MemberUpdate:
+      type: object
+      required: [role]
+      properties:
+        role:
+          type: string
+          enum: [commissioner, deputy, player]
+
+    # ── NFL Games ─────────────────────────────────────────────────────────────
+    NflGame:
+      type: object
+      required: [id, week, season, homeTeam, awayTeam, kickoffAt, gameStatus, spread, favoredTeam, updatedAt]
+      properties:
+        id:
+          type: string
+        week:
+          type: number
+        season:
+          type: number
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        kickoffAt:
+          type: string
+          format: date-time
+        gameStatus:
+          type: string
+          enum: [scheduled, in_progress, final, postponed]
+        spread:
+          type: ["number", "null"]
+        favoredTeam:
+          type: ["string", "null"]
+          enum: ["home", "away", null]
+        homeScore:
+          type: ["number", "null"]
+        awayScore:
+          type: ["number", "null"]
+        updatedAt:
+          type: string
+          format: date-time
+
+    CurrentNflWeek:
+      type: object
+      required: [week, season]
+      properties:
+        week:
+          type: number
+        season:
+          type: number
+
+    # ── Pick Events ───────────────────────────────────────────────────────────
+    PickEvent:
+      type: object
+      required: [id, leagueId, name, nflWeek, nflSeason, status, submissionDeadline, revealAt, createdAt]
+      properties:
+        id:
+          type: number
+        leagueId:
+          type: number
+        name:
+          type: string
+        nflWeek:
+          type: number
+        nflSeason:
+          type: number
+        status:
+          type: string
+          enum: [draft, open, locked, revealed, finalized]
+        submissionDeadline:
+          type: string
+          format: date-time
+        revealAt:
+          type: string
+          format: date-time
+        tiebreakerQuestion:
+          type: ["string", "null"]
+        tiebreakerResult:
+          type: ["number", "null"]
+        notes:
+          type: ["string", "null"]
+        submissionCount:
+          type: number
+        totalMembers:
+          type: number
+        publishedAt:
+          type: ["string", "null"]
+          format: date-time
+        finalizedAt:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    PickEventInput:
+      type: object
+      required: [name, nflWeek, nflSeason, submissionDeadline, revealAt]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        nflWeek:
+          type: number
+        nflSeason:
+          type: number
+        submissionDeadline:
+          type: string
+          format: date-time
+        revealAt:
+          type: string
+          format: date-time
+        tiebreakerQuestion:
+          type: string
+        notes:
+          type: string
+
+    PickEventUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        submissionDeadline:
+          type: string
+          format: date-time
+        revealAt:
+          type: string
+          format: date-time
+        tiebreakerQuestion:
+          type: ["string", "null"]
+        tiebreakerResult:
+          type: ["number", "null"]
+        notes:
+          type: ["string", "null"]
+
+    # ── Event Games ───────────────────────────────────────────────────────────
+    EventGame:
+      type: object
+      required: [id, pickEventId, nflGameId, displayOrder, createdAt]
+      properties:
+        id:
+          type: number
+        pickEventId:
+          type: number
+        nflGameId:
+          type: string
+        lockedSpread:
+          type: ["number", "null"]
+        spreadTeam:
+          type: ["string", "null"]
+          enum: ["home", "away", null]
+        lockedAt:
+          type: ["string", "null"]
+          format: date-time
+        displayOrder:
+          type: number
+        result:
+          type: ["string", "null"]
+          enum: ["home", "away", "push", null]
+        homeScore:
+          type: ["number", "null"]
+        awayScore:
+          type: ["number", "null"]
+        isFinalized:
+          type: boolean
+        nflGame:
+          $ref: "#/components/schemas/NflGame"
+        createdAt:
+          type: string
+          format: date-time
+
+    EventGameInput:
+      type: object
+      required: [nflGameId, displayOrder]
+      properties:
+        nflGameId:
+          type: string
+        displayOrder:
+          type: number
+        lockedSpread:
+          type: ["number", "null"]
+        spreadTeam:
+          type: ["string", "null"]
+          enum: ["home", "away", null]
+
+    EventGameUpdate:
+      type: object
+      properties:
+        result:
+          type: ["string", "null"]
+          enum: ["home", "away", "push", null]
+        homeScore:
+          type: ["number", "null"]
+        awayScore:
+          type: ["number", "null"]
+        isFinalized:
+          type: boolean
+
+    # ── Submissions ───────────────────────────────────────────────────────────
+    Submission:
+      type: object
+      required: [id, pickEventId, userId, submittedAt, picks]
+      properties:
+        id:
+          type: number
+        pickEventId:
+          type: number
+        userId:
+          type: string
+        tiebreakerAnswer:
+          type: ["number", "null"]
+        moneyPickGameId:
+          type: ["number", "null"]
+        submittedAt:
+          type: string
+          format: date-time
+        lockedAt:
+          type: ["string", "null"]
+          format: date-time
+        picks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Pick"
+
+    SubmissionEnvelope:
+      type: object
+      required: [submission]
+      properties:
+        submission:
+          oneOf:
+            - $ref: '#/components/schemas/Submission'
+            - type: 'null'
+
+    SubmissionsResponse:
+      type: object
+      required: [revealed, submittedCount, totalMembers]
+      properties:
+        revealed:
+          type: boolean
+        submittedCount:
+          type: number
+        totalMembers:
+          type: number
+        submissions:
+          type: array
+          items:
+            $ref: "#/components/schemas/SubmissionWithUser"
+
+    SubmissionWithUser:
+      type: object
+      required: [id, pickEventId, userId, submittedAt, picks, displayName, profileImageUrl]
+      properties:
+        id:
+          type: number
+        pickEventId:
+          type: number
+        userId:
+          type: string
+        displayName:
+          type: ["string", "null"]
+        profileImageUrl:
+          type: ["string", "null"]
+        tiebreakerAnswer:
+          type: ["number", "null"]
+        moneyPickGameId:
+          type: ["number", "null"]
+        submittedAt:
+          type: string
+          format: date-time
+        lockedAt:
+          type: ["string", "null"]
+          format: date-time
+        picks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Pick"
+
+    Pick:
+      type: object
+      required: [id, submissionId, eventGameId, selectedTeam]
+      properties:
+        id:
+          type: number
+        submissionId:
+          type: number
+        eventGameId:
+          type: number
+        selectedTeam:
+          type: string
+          enum: [home, away]
+        result:
+          type: ["string", "null"]
+          enum: ["win", "loss", "push", null]
+        pointsAwarded:
+          type: ["number", "null"]
+
+    SubmissionInput:
+      type: object
+      required: [picks, moneyPickGameId, tiebreakerAnswer]
+      properties:
+        picks:
+          type: array
+          items:
+            $ref: "#/components/schemas/PickInput"
+        moneyPickGameId:
+          type: number
+        tiebreakerAnswer:
+          type: number
+
+    PickInput:
+      type: object
+      required: [eventGameId, selectedTeam]
+      properties:
+        eventGameId:
+          type: number
+        selectedTeam:
+          type: string
+          enum: [home, away]
+
+    SubmissionUpdate:
+      type: object
+      required: [picks, moneyPickGameId, tiebreakerAnswer]
+      properties:
+        picks:
+          type: array
+          items:
+            $ref: "#/components/schemas/PickInput"
+        moneyPickGameId:
+          type: number
+        tiebreakerAnswer:
+          type: number
+
+    # ── Live Board ────────────────────────────────────────────────────────────
+    LiveBoard:
+      type: object
+      required: [event, games, rows, revealed]
+      properties:
+        event:
+          $ref: "#/components/schemas/PickEvent"
+        games:
+          type: array
+          items:
+            $ref: "#/components/schemas/EventGame"
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/BoardRow"
+        revealed:
+          type: boolean
+
+    BoardRow:
+      type: object
+      required: [userId, displayName, profileImageUrl, cells, currentPoints, maxPossiblePoints, rank, isEliminated, tiebreakerAnswer, moneyPickGameId]
+      properties:
+        userId:
+          type: string
+        displayName:
+          type: ["string", "null"]
+        profileImageUrl:
+          type: ["string", "null"]
+        cells:
+          type: array
+          items:
+            $ref: "#/components/schemas/BoardCell"
+        currentPoints:
+          type: number
+        maxPossiblePoints:
+          type: number
+        rank:
+          type: number
+        isEliminated:
+          type: boolean
+        tiebreakerAnswer:
+          type: ["number", "null"]
+        moneyPickGameId:
+          type: ["number", "null"]
+
+    BoardCell:
+      type: object
+      required: [eventGameId, selectedTeam, isMoneyPick, result, pointsAwarded]
+      properties:
+        eventGameId:
+          type: number
+        selectedTeam:
+          type: ["string", "null"]
+          enum: ["home", "away", null]
+        isMoneyPick:
+          type: boolean
+        result:
+          type: ["string", "null"]
+          enum: ["win", "loss", "push", null]
+        pointsAwarded:
+          type: ["number", "null"]
+
+    # ── Standings ─────────────────────────────────────────────────────────────
+    StandingEntry:
+      type: object
+      required: [userId, displayName, profileImageUrl, totalPoints, eventsEntered, weeklyWins, normalCorrect, normalTotal, moneyCorrect, moneyTotal, rank]
+      properties:
+        userId:
+          type: string
+        displayName:
+          type: ["string", "null"]
+        profileImageUrl:
+          type: ["string", "null"]
+        totalPoints:
+          type: number
+        eventsEntered:
+          type: number
+        weeklyWins:
+          type: number
+        normalCorrect:
+          type: number
+        normalTotal:
+          type: number
+        moneyCorrect:
+          type: number
+        moneyTotal:
+          type: number
+        rank:
+          type: number
+
+    EventStandingEntry:
+      type: object
+      required: [userId, displayName, profileImageUrl, points, maxPossible, normalCorrect, normalTotal, moneyCorrect, moneyTotal, rank, isEliminated, tiebreakerAnswer]
+      properties:
+        userId:
+          type: string
+        displayName:
+          type: ["string", "null"]
+        profileImageUrl:
+          type: ["string", "null"]
+        points:
+          type: number
+        maxPossible:
+          type: number
+        normalCorrect:
+          type: number
+        normalTotal:
+          type: number
+        moneyCorrect:
+          type: number
+        moneyTotal:
+          type: number
+        rank:
+          type: number
+        isEliminated:
+          type: boolean
+        tiebreakerAnswer:
+          type: ["number", "null"]
+
+    # ── Dashboard ─────────────────────────────────────────────────────────────
+    Dashboard:
+      type: object
+      required: [leagues, currentNflWeek]
+      properties:
+        leagues:
+          type: array
+          items:
+            $ref: "#/components/schemas/DashboardLeague"
+        currentNflWeek:
+          $ref: "#/components/schemas/CurrentNflWeek"
+
+    DashboardLeague:
+      type: object
+      required: [league, myRank, totalMembers, activeEvent]
+      properties:
+        league:
+          $ref: "#/components/schemas/League"
+        myRank:
+          type: number
+        totalMembers:
+          type: number
+        activeEvent:
+          oneOf:
+            - $ref: "#/components/schemas/DashboardEvent"
+            - type: "null"
+
+    DashboardEvent:
+      type: object
+      required: [event, hasSubmitted, submittedCount, totalMembers]
+      properties:
+        event:
+          $ref: "#/components/schemas/PickEvent"
+        hasSubmitted:
+          type: boolean
+        submittedCount:
+          type: number
+        totalMembers:
+          type: number
+        myCurrentPoints:
+          type: ["number", "null"]
+        myRankInEvent:
+          type: ["number", "null"]
