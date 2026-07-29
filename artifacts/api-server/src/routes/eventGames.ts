@@ -138,17 +138,36 @@ router.patch("/leagues/:leagueId/events/:eventId/games/:eventGameId", async (req
   const parsed = UpdateEventGameBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
+  const [event] = await db
+    .select()
+    .from(pickEventsTable)
+    .where(and(eq(pickEventsTable.id, eventId), eq(pickEventsTable.leagueId, leagueId)));
+  if (!event) { res.status(404).json({ error: "Event not found" }); return; }
+
   const [eg] = await db
     .select()
     .from(eventGamesTable)
     .where(and(eq(eventGamesTable.id, eventGameId), eq(eventGamesTable.pickEventId, eventId)));
   if (!eg) { res.status(404).json({ error: "Event game not found" }); return; }
 
+  // Spread corrections are only allowed while the event is still in draft
+  if (
+    ("lockedSpread" in parsed.data && parsed.data.lockedSpread !== undefined) ||
+    ("spreadTeam" in parsed.data && parsed.data.spreadTeam !== undefined)
+  ) {
+    if (event.status !== "draft") {
+      res.status(400).json({ error: "Spread can only be corrected while the event is in draft" });
+      return;
+    }
+  }
+
   const updates: Partial<typeof eventGamesTable.$inferInsert> = {};
   if ("result" in parsed.data) updates.result = parsed.data.result;
   if ("homeScore" in parsed.data) updates.homeScore = parsed.data.homeScore ?? undefined;
   if ("awayScore" in parsed.data) updates.awayScore = parsed.data.awayScore ?? undefined;
   if ("isFinalized" in parsed.data) updates.isFinalized = parsed.data.isFinalized;
+  if ("lockedSpread" in parsed.data) updates.lockedSpread = parsed.data.lockedSpread ?? undefined;
+  if ("spreadTeam" in parsed.data) updates.spreadTeam = parsed.data.spreadTeam ?? undefined;
 
   // Auto-calculate ATS result from scores if not explicitly provided
   if (!updates.result && updates.homeScore != null && updates.awayScore != null && eg.lockedSpread != null && eg.spreadTeam) {

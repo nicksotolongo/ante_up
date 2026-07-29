@@ -37,6 +37,8 @@ export default function EventManagement() {
 
   const [tiebreakerResult, setTiebreakerResult] = useState("");
   const [pendingRemove, setPendingRemove] = useState<{ nflGameId: string; eventGameId: number; label: string } | null>(null);
+  const [editingSpread, setEditingSpread] = useState<number | null>(null); // eventGameId being edited
+  const [spreadDraft, setSpreadDraft] = useState<{ lockedSpread: string; spreadTeam: string }>({ lockedSpread: "", spreadTeam: "" });
 
   useEffect(() => {
     if (event?.tiebreakerResult != null) {
@@ -99,6 +101,33 @@ export default function EventManagement() {
     });
   };
 
+  const handleEditSpread = (eg: { id: number; lockedSpread?: number | null; spreadTeam?: string | null }) => {
+    setEditingSpread(eg.id);
+    setSpreadDraft({
+      lockedSpread: eg.lockedSpread != null ? String(eg.lockedSpread) : "",
+      spreadTeam: eg.spreadTeam ?? "",
+    });
+  };
+
+  const handleSaveSpread = (eventGameId: number) => {
+    const parsed = parseFloat(spreadDraft.lockedSpread);
+    const lockedSpread = spreadDraft.lockedSpread === "" ? null : isNaN(parsed) ? null : parsed;
+    const spreadTeam = (spreadDraft.spreadTeam === "home" || spreadDraft.spreadTeam === "away") ? spreadDraft.spreadTeam : null;
+    updateGame.mutate(
+      { leagueId, eventId, eventGameId, data: { lockedSpread, spreadTeam } },
+      {
+        onSuccess: () => {
+          toast({ title: "Spread updated" });
+          queryClient.invalidateQueries({ queryKey: ["/api/leagues", leagueId, "events", eventId, "games"] });
+          setEditingSpread(null);
+        },
+        onError: (err: any) => {
+          toast({ title: "Error updating spread", description: err?.message, variant: "destructive" });
+        },
+      }
+    );
+  };
+
   const handleAction = (action: any, actionName: string) => {
     action.mutate({ leagueId, eventId }, {
       onSuccess: () => {
@@ -155,15 +184,54 @@ export default function EventManagement() {
           ) : (
             <div className="grid gap-2">
               {eventGames?.map(eg => (
-                <div key={eg.id} className="flex items-center justify-between p-4 border border-border bg-card">
-                  <div>
-                    <div className="font-mono font-bold text-lg">{eg.nflGame?.awayTeam} @ {eg.nflGame?.homeTeam}</div>
-                    <div className="text-xs uppercase text-muted-foreground mt-1">Spread: {eg.spreadTeam} {eg.lockedSpread != null ? eg.lockedSpread : 'PK'}</div>
+                <div key={eg.id} className="flex flex-col gap-2 p-4 border border-border bg-card">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="font-mono font-bold text-lg">{eg.nflGame?.awayTeam} @ {eg.nflGame?.homeTeam}</div>
+                      <div className="text-xs uppercase text-muted-foreground mt-1">
+                        Spread: {eg.spreadTeam || '—'} {eg.lockedSpread != null ? eg.lockedSpread : 'PK'}
+                      </div>
+                    </div>
+                    {event.status === "draft" && (
+                      <div className="flex gap-2">
+                        {editingSpread !== eg.id && (
+                          <Button variant="outline" size="sm" className="uppercase font-bold text-xs rounded-none" onClick={() => handleEditSpread(eg)}>
+                            Edit Spread
+                          </Button>
+                        )}
+                        <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10 uppercase font-bold text-xs rounded-none" onClick={() => handleToggleGame(eg.nflGameId, true, undefined, undefined, `${eg.nflGame?.awayTeam} @ ${eg.nflGame?.homeTeam}`)}>
+                          Remove
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                  {event.status === "draft" && (
-                    <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10 uppercase font-bold text-xs rounded-none" onClick={() => handleToggleGame(eg.nflGameId, true, undefined, undefined, `${eg.nflGame?.awayTeam} @ ${eg.nflGame?.homeTeam}`)}>
-                      Remove
-                    </Button>
+                  {event.status === "draft" && editingSpread === eg.id && (
+                    <div className="flex items-center gap-2 pt-1 border-t border-border">
+                      <select
+                        className="border border-border bg-background text-foreground text-xs uppercase font-bold px-2 py-1 rounded-none h-8"
+                        value={spreadDraft.spreadTeam}
+                        onChange={e => setSpreadDraft(d => ({ ...d, spreadTeam: e.target.value }))}
+                      >
+                        <option value="">No Favorite</option>
+                        <option value="away">{eg.nflGame?.awayTeam} (Away)</option>
+                        <option value="home">{eg.nflGame?.homeTeam} (Home)</option>
+                      </select>
+                      <Input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        placeholder="e.g. 3.5"
+                        value={spreadDraft.lockedSpread}
+                        onChange={e => setSpreadDraft(d => ({ ...d, lockedSpread: e.target.value }))}
+                        className="w-28 rounded-none h-8 text-xs font-mono"
+                      />
+                      <Button size="sm" className="rounded-none uppercase font-bold text-xs h-8" onClick={() => handleSaveSpread(eg.id)}>
+                        Save
+                      </Button>
+                      <Button variant="ghost" size="sm" className="rounded-none uppercase font-bold text-xs h-8" onClick={() => setEditingSpread(null)}>
+                        Cancel
+                      </Button>
+                    </div>
                   )}
                 </div>
               ))}

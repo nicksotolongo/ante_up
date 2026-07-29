@@ -1157,6 +1157,11 @@ components:
           type: ["number", "null"]
         isFinalized:
           type: boolean
+        lockedSpread:
+          type: ["number", "null"]
+        spreadTeam:
+          type: ["string", "null"]
+          enum: ["home", "away", null]
 
     # ── Submissions ───────────────────────────────────────────────────────────
     Submission:

@@ -571,7 +571,9 @@ export const UpdateEventGameBody = zod.object({
   "result": zod.union([zod.literal('home'),zod.literal('away'),zod.literal('push'),zod.literal(null)]).nullish(),
   "homeScore": zod.number().nullish(),
   "awayScore": zod.number().nullish(),
-  "isFinalized": zod.boolean().optional()
+  "isFinalized": zod.boolean().optional(),
+  "lockedSpread": zod.number().nullish(),
+  "spreadTeam": zod.union([zod.literal('home'),zod.literal('away'),zod.literal(null)]).nullish()
 })
 
 export const UpdateEventGameResponse = zod.object({

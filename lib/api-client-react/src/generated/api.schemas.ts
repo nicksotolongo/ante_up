@@ -289,6 +289,10 @@ export interface EventGameUpdate {
   /** @nullable */
   awayScore?: number | null;
   isFinalized?: boolean;
+  /** @nullable */
+  lockedSpread?: number | null;
+  /** @nullable */
+  spreadTeam?: 'home' | 'away' | null;
 }
 
 export type PickSelectedTeam = typeof PickSelectedTeam[keyof typeof PickSelectedTeam];
