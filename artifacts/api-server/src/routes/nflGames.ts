@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { getMockNflGames, getCurrentNflWeek } from "../lib/mockNflGames";
+import { getNflGames, getCurrentNflWeek } from "../lib/espnProvider";
 import { ListNflGamesQueryParams } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -9,10 +9,11 @@ router.get("/nfl-games", async (req, res): Promise<void> => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
 
   const params = ListNflGamesQueryParams.safeParse(req.query);
-  const week = params.success ? params.data.week : undefined;
-  const season = params.success ? params.data.season : undefined;
+  const { week: currentWeek, season: currentSeason } = getCurrentNflWeek();
+  const week = params.success && params.data.week ? Number(params.data.week) : currentWeek;
+  const season = params.success && params.data.season ? Number(params.data.season) : currentSeason;
 
-  const games = getMockNflGames(week ? Number(week) : undefined, season ? Number(season) : undefined);
+  const games = await getNflGames(week, season);
 
   res.json(games.map((g) => ({
     id: g.id,
@@ -31,7 +32,7 @@ router.get("/nfl-games", async (req, res): Promise<void> => {
 });
 
 // GET /nfl-games/current-week
-router.get("/nfl-games/current-week", async (_req, res): Promise<void> => {
+router.get("/nfl-games/current-week", (_req, res): void => {
   const { week, season } = getCurrentNflWeek();
   res.json({ week, season });
 });

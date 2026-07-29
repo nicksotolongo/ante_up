@@ -109,12 +109,12 @@ export default function EventManagement() {
         <div className="flex gap-2">
           {event.status === "draft" && (
             <Button className="rounded-none uppercase font-bold" onClick={() => handleAction(lockEvent, "Publish Event")}>
-              Publish & Open
+              Publish &amp; Open
             </Button>
           )}
-          {["locked", "revealed"].includes(event.status) && (
-            <Button className="rounded-none uppercase font-bold bg-foreground text-background" onClick={() => handleAction(finalizeEvent, "Finalize Event")}>
-              Finalize & Score
+          {["open", "locked", "revealed"].includes(event.status) && (
+            <Button className="rounded-none uppercase font-bold bg-foreground text-background" onClick={() => handleAction(finalizeEvent, "Finalize & Score")}>
+              Finalize &amp; Score
             </Button>
           )}
         </div>

@@ -1,6 +1,8 @@
 import { Router, type IRouter } from "express";
 import { and, eq, sql } from "drizzle-orm";
-import { db, leagueMembersTable, leaguesTable, pickEventsTable, submissionsTable } from "@workspace/db";
+import { db, eventGamesTable, leagueMembersTable, leaguesTable, picksTable, pickEventsTable, submissionsTable } from "@workspace/db";
+import { getNflGames, getNflGame } from "../lib/espnProvider";
+import { calculateAtsResult } from "../lib/mockNflGames";
 import {
   CreatePickEventBody,
   CreatePickEventParams,
@@ -192,6 +194,51 @@ router.post("/leagues/:leagueId/events/:eventId/finalize", async (req, res): Pro
 
   const [event] = await db.select().from(pickEventsTable).where(and(eq(pickEventsTable.id, eventId), eq(pickEventsTable.leagueId, leagueId)));
   if (!event) { res.status(404).json({ error: "Event not found" }); return; }
+
+  // Fetch real scores from ESPN for this week, then grade picks
+  const games = await db.select().from(eventGamesTable).where(eq(eventGamesTable.pickEventId, eventId));
+  const espnGames = await getNflGames(event.nflWeek, event.nflSeason);
+
+  for (const eg of games) {
+    // Match by ESPN ID first (games added after ESPN integration), then fall back to team names
+    const espnGame =
+      espnGames.find(g => g.id === eg.nflGameId) ??
+      espnGames.find(g => g.homeTeam === eg.homeTeam && g.awayTeam === eg.awayTeam);
+
+    let result: "home" | "away" | "push" | null = eg.result as "home" | "away" | "push" | null;
+    let homeScore = eg.homeScore;
+    let awayScore = eg.awayScore;
+
+    // Use ESPN final scores when available; fall back to any manually-entered result already on the game
+    if (espnGame?.gameStatus === "final" && espnGame.homeScore != null && espnGame.awayScore != null && eg.lockedSpread != null && eg.spreadTeam) {
+      homeScore = espnGame.homeScore;
+      awayScore = espnGame.awayScore;
+      result = calculateAtsResult(espnGame.homeScore, espnGame.awayScore, eg.lockedSpread, eg.spreadTeam as "home" | "away");
+    }
+
+    if (!result) continue; // No score available yet — skip this game
+
+    // Persist result + scores + finalized flag
+    await db.update(eventGamesTable).set({ result, homeScore: homeScore ?? undefined, awayScore: awayScore ?? undefined, isFinalized: true }).where(eq(eventGamesTable.id, eg.id));
+
+    // Grade every pick for this game
+    const subs = await db.select().from(submissionsTable).where(eq(submissionsTable.pickEventId, eventId));
+    for (const sub of subs) {
+      const [pick] = await db.select().from(picksTable).where(and(eq(picksTable.submissionId, sub.id), eq(picksTable.eventGameId, eg.id)));
+      if (!pick) continue;
+      const isMoneyPick = sub.moneyPickGameId === eg.id;
+      let pickResult: "win" | "loss" | "push";
+      let pointsAwarded: number;
+      if (result === "push") {
+        pickResult = "push"; pointsAwarded = isMoneyPick ? 1 : 0.5;
+      } else if (pick.selectedTeam === result) {
+        pickResult = "win"; pointsAwarded = isMoneyPick ? 2 : 1;
+      } else {
+        pickResult = "loss"; pointsAwarded = 0;
+      }
+      await db.update(picksTable).set({ result: pickResult, pointsAwarded }).where(eq(picksTable.id, pick.id));
+    }
+  }
 
   const [updated] = await db.update(pickEventsTable).set({ status: "finalized", finalizedAt: new Date() }).where(eq(pickEventsTable.id, eventId)).returning();
   const { submissionCount, totalMembers } = await getEventCounts(eventId, leagueId);

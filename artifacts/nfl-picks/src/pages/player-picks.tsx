@@ -50,7 +50,18 @@ export default function PlayerPicksForm() {
 
   if (!event || !games) return <Shell leagueId={leagueId} backTo={`/leagues/${leagueId}`}><div>Not found</div></Shell>;
 
-  const isLocked = event.status !== "draft" && event.status !== "open";
+  if (event.status === "draft") {
+    return (
+      <Shell title="Make Picks" leagueId={leagueId} backTo={`/leagues/${leagueId}`}>
+        <div className="p-8 text-center border border-dashed border-border bg-secondary/10">
+          <div className="font-serif font-black uppercase text-xl mb-2">{event.name}</div>
+          <div className="text-muted-foreground uppercase tracking-widest text-sm">This event hasn&apos;t been published yet. Check back soon.</div>
+        </div>
+      </Shell>
+    );
+  }
+
+  const isLocked = event.status !== "open"; // locked, revealed, finalized all block new submissions
   const hasSubmitted = !!submissionEnvelope?.submission;
   const allPicked = games.every(g => picks[g.id]);
   const isValid = allPicked && moneyPick && (event.tiebreakerQuestion ? tiebreaker.trim() !== "" : true);
