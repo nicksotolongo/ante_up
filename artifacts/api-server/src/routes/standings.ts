@@ -112,55 +112,66 @@ router.get("/leagues/:leagueId/events/:eventId/standings", async (req, res): Pro
   const [event] = await db.select().from(pickEventsTable).where(and(eq(pickEventsTable.id, eventId), eq(pickEventsTable.leagueId, leagueId)));
   if (!event) { res.status(404).json({ error: "Event not found" }); return; }
 
-  const allMembers = await db.select({
-    userId: leagueMembersTable.userId,
-    firstName: usersTable.firstName,
-    lastName: usersTable.lastName,
-    profileImageUrl: usersTable.profileImageUrl,
-  }).from(leagueMembersTable).innerJoin(usersTable, eq(usersTable.id, leagueMembersTable.userId)).where(and(eq(leagueMembersTable.leagueId, leagueId), eq(leagueMembersTable.status, "active")));
+  const [allMembers, allSubs] = await Promise.all([
+    db.select({
+      userId: leagueMembersTable.userId,
+      firstName: usersTable.firstName,
+      lastName: usersTable.lastName,
+      profileImageUrl: usersTable.profileImageUrl,
+    }).from(leagueMembersTable).innerJoin(usersTable, eq(usersTable.id, leagueMembersTable.userId)).where(and(eq(leagueMembersTable.leagueId, leagueId), eq(leagueMembersTable.status, "active"))),
+    db.select().from(submissionsTable).where(eq(submissionsTable.pickEventId, eventId)),
+  ]);
 
-  const eventGames = await db.select().from(eventGamesTable).where(eq(eventGamesTable.pickEventId, eventId));
+  const subIds = allSubs.map(s => s.id);
+  const allPicks = subIds.length > 0
+    ? await db.select().from(picksTable).where(or(...subIds.map(id => eq(picksTable.submissionId, id)))!)
+    : [];
 
-  const standings = await Promise.all(allMembers.map(async (m) => {
-    const [sub] = await db.select().from(submissionsTable).where(and(eq(submissionsTable.pickEventId, eventId), eq(submissionsTable.userId, m.userId)));
+  const standings = allMembers.map((m) => {
+    const sub = allSubs.find(s => s.userId === m.userId);
+    const displayName = [m.firstName, m.lastName].filter(Boolean).join(" ") || m.userId;
+    const base = { userId: m.userId, displayName, profileImageUrl: m.profileImageUrl ?? null };
+
     if (!sub) {
-      return {
-        userId: m.userId,
-        displayName: [m.firstName, m.lastName].filter(Boolean).join(" ") || m.userId,
-        profileImageUrl: m.profileImageUrl ?? null,
-        totalPoints: 0,
-        eventsEntered: 0,
-        weeklyWins: 0,
-        normalCorrect: 0,
-        normalTotal: 0,
-        moneyCorrect: 0,
-        moneyTotal: 0,
-        rank: 0,
-      };
+      return { ...base, points: 0, maxPossible: 0, normalCorrect: 0, normalTotal: 0, moneyCorrect: 0, moneyTotal: 0, tiebreakerAnswer: null, isEliminated: false, rank: 0 };
     }
 
-    const picks = await db.select().from(picksTable).where(eq(picksTable.submissionId, sub.id));
-    const totalPoints = picks.reduce((sum, p) => sum + (p.pointsAwarded ?? 0), 0);
-    const normalPicks = picks.filter((p) => sub.moneyPickGameId !== p.eventGameId);
-    const moneyPick = picks.find((p) => sub.moneyPickGameId === p.eventGameId);
+    const picks = allPicks.filter(p => p.submissionId === sub.id);
+    const points = picks.reduce((sum, p) => sum + (p.pointsAwarded ?? 0), 0);
+
+    // maxPossible: current points + potential from ungraded picks
+    const maxPossible = picks.reduce((sum, p) => {
+      if (p.result === "loss") return sum; // already lost
+      const potential = sub.moneyPickGameId === p.eventGameId ? 2 : 1;
+      return sum + (p.result === "win" ? (p.pointsAwarded ?? potential) : potential);
+    }, 0);
+
+    const normalPicks = picks.filter(p => sub.moneyPickGameId !== p.eventGameId);
+    const moneyPick = picks.find(p => sub.moneyPickGameId === p.eventGameId);
 
     return {
-      userId: m.userId,
-      displayName: [m.firstName, m.lastName].filter(Boolean).join(" ") || m.userId,
-      profileImageUrl: m.profileImageUrl ?? null,
-      totalPoints,
-      eventsEntered: 1,
-      weeklyWins: 0,
-      normalCorrect: normalPicks.filter((p) => p.result === "win").length,
-      normalTotal: normalPicks.filter((p) => p.result != null).length,
+      ...base,
+      points,
+      maxPossible,
+      normalCorrect: normalPicks.filter(p => p.result === "win").length,
+      normalTotal: normalPicks.filter(p => p.result != null).length,
       moneyCorrect: moneyPick?.result === "win" ? 1 : 0,
       moneyTotal: moneyPick != null ? 1 : 0,
+      tiebreakerAnswer: sub.tiebreakerAnswer ?? null,
+      isEliminated: false, // set after sorting
       rank: 0,
     };
-  }));
+  });
 
-  standings.sort((a, b) => b.totalPoints - a.totalPoints);
-  standings.forEach((s, i) => { s.rank = i + 1; });
+  standings.sort((a, b) => b.points - a.points);
+
+  // Mark eliminated: maxPossible < leader's current points
+  const leaderPoints = standings[0]?.points ?? 0;
+  standings.forEach((s, i) => {
+    s.rank = i + 1;
+    s.isEliminated = s.maxPossible < leaderPoints;
+  });
+
   res.json(standings);
 });
 
