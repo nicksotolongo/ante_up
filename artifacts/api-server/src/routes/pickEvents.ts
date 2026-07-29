@@ -236,7 +236,7 @@ router.post("/leagues/:leagueId/events/:eventId/finalize", async (req, res): Pro
       let pickResult: "win" | "loss" | "push";
       let pointsAwarded: number;
       if (result === "push") {
-        pickResult = "push"; pointsAwarded = isMoneyPick ? 1 : 0.5;
+        pickResult = "push"; pointsAwarded = 0;
       } else if (pick.selectedTeam === result) {
         pickResult = "win"; pointsAwarded = isMoneyPick ? 2 : 1;
       } else {

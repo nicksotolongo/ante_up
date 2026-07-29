@@ -204,7 +204,7 @@ async function gradePicks(
     const pickResult: "win" | "loss" | "push" =
       result === "push" ? "push" : pick.selectedTeam === result ? "win" : "loss";
     const pointsAwarded =
-      result === "push" ? (isMoneyPick ? 1 : 0.5) :
+      result === "push" ? 0 :
       pick.selectedTeam === result ? (isMoneyPick ? 2 : 1) : 0;
     await db.update(picksTable).set({ result: pickResult, pointsAwarded }).where(eq(picksTable.id, pick.id));
   }
