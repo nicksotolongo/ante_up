@@ -218,13 +218,20 @@ router.delete("/leagues/:leagueId/events/:eventId/games/:eventGameId", async (re
     .where(and(eq(eventGamesTable.id, eventGameId), eq(eventGamesTable.pickEventId, eventId)));
   if (!eg) { res.status(404).json({ error: "Event game not found" }); return; }
 
+  // Count picks first so we can return the number deleted to the caller
+  const existingPicks = await db
+    .select({ id: picksTable.id })
+    .from(picksTable)
+    .where(eq(picksTable.eventGameId, eventGameId));
+  const deletedPicksCount = existingPicks.length;
+
   // Cascade-delete picks then the game atomically so a partial failure leaves no orphans
   await db.transaction(async (tx) => {
     await tx.delete(picksTable).where(eq(picksTable.eventGameId, eventGameId));
     await tx.delete(eventGamesTable).where(eq(eventGamesTable.id, eventGameId));
   });
 
-  res.sendStatus(204);
+  res.json({ deletedPicksCount });
 });
 
 export default router;

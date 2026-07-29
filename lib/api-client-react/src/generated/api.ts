@@ -2012,9 +2012,9 @@ export const getRemoveEventGameUrl = (leagueId: number,
  */
 export const removeEventGame = async (leagueId: number,
     eventId: number,
-    eventGameId: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+    eventGameId: number, options?: Parameters<typeof customFetch>[1]): Promise<{ deletedPicksCount: number }> => {
 
-  return customFetch<void>(getRemoveEventGameUrl(leagueId,eventId,eventGameId),
+  return customFetch<{ deletedPicksCount: number }>(getRemoveEventGameUrl(leagueId,eventId,eventGameId),
   {
     ...options,
     method: 'DELETE'

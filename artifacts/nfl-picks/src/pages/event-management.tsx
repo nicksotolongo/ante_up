@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useRef } from "react";
@@ -35,7 +36,8 @@ export default function EventManagement() {
   const updateEvent = useUpdatePickEvent();
 
   const [tiebreakerResult, setTiebreakerResult] = useState("");
-  
+  const [pendingRemove, setPendingRemove] = useState<{ nflGameId: string; eventGameId: number; label: string } | null>(null);
+
   useEffect(() => {
     if (event?.tiebreakerResult != null) {
       setTiebreakerResult(event.tiebreakerResult.toString());
@@ -45,13 +47,11 @@ export default function EventManagement() {
   if (loadingEvent || loadingGames) return <Shell leagueId={leagueId} backTo={`/leagues/${leagueId}/commissioner`}><div className="animate-pulse h-64 bg-muted"></div></Shell>;
   if (!event) return <Shell><div className="p-8 text-center">Event not found</div></Shell>;
 
-  const handleToggleGame = (nflGameId: string, isIncluded: boolean, spread?: number | null, favoredTeam?: string | null) => {
+  const handleToggleGame = (nflGameId: string, isIncluded: boolean, spread?: number | null, favoredTeam?: string | null, label?: string) => {
     if (isIncluded) {
       const existing = eventGames?.find(eg => eg.nflGameId === nflGameId);
       if (existing) {
-        removeGame.mutate({ leagueId, eventId, eventGameId: existing.id }, {
-          onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/leagues", leagueId, "events", eventId, "games"] })
-        });
+        setPendingRemove({ nflGameId, eventGameId: existing.id, label: label || nflGameId });
       }
     } else {
       addGame.mutate({
@@ -67,6 +67,27 @@ export default function EventManagement() {
         onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/leagues", leagueId, "events", eventId, "games"] })
       });
     }
+  };
+
+  const handleConfirmRemove = () => {
+    if (!pendingRemove) return;
+    removeGame.mutate({ leagueId, eventId, eventGameId: pendingRemove.eventGameId }, {
+      onSuccess: (data) => {
+        queryClient.invalidateQueries({ queryKey: ["/api/leagues", leagueId, "events", eventId, "games"] });
+        const count = data?.deletedPicksCount ?? 0;
+        toast({
+          title: "Game removed",
+          description: count > 0
+            ? `${count} player pick${count === 1 ? "" : "s"} were also deleted.`
+            : undefined,
+        });
+        setPendingRemove(null);
+      },
+      onError: (err: any) => {
+        toast({ title: "Error removing game", description: err?.message, variant: "destructive" });
+        setPendingRemove(null);
+      }
+    });
   };
 
   const handleUpdateResult = (eventGameId: number, result: EventGameUpdateResult) => {
@@ -140,7 +161,7 @@ export default function EventManagement() {
                     <div className="text-xs uppercase text-muted-foreground mt-1">Spread: {eg.spreadTeam} {eg.lockedSpread != null ? eg.lockedSpread : 'PK'}</div>
                   </div>
                   {event.status === "draft" && (
-                    <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10 uppercase font-bold text-xs rounded-none" onClick={() => handleToggleGame(eg.nflGameId, true)}>
+                    <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10 uppercase font-bold text-xs rounded-none" onClick={() => handleToggleGame(eg.nflGameId, true, undefined, undefined, `${eg.nflGame?.awayTeam} @ ${eg.nflGame?.homeTeam}`)}>
                       Remove
                     </Button>
                   )}
@@ -161,7 +182,7 @@ export default function EventManagement() {
                   <div key={game.id} className="flex items-center gap-4 p-4 border border-border bg-card">
                     <Checkbox 
                       checked={isIncluded} 
-                      onCheckedChange={() => handleToggleGame(game.id, isIncluded, game.spread, game.favoredTeam)}
+                      onCheckedChange={() => handleToggleGame(game.id, isIncluded, game.spread, game.favoredTeam, `${game.awayTeam} @ ${game.homeTeam}`)}
                       className="rounded-none w-5 h-5"
                     />
                     <div>
@@ -259,6 +280,27 @@ export default function EventManagement() {
           )}
         </TabsContent>
       </Tabs>
+
+      <AlertDialog open={!!pendingRemove} onOpenChange={(open) => { if (!open) setPendingRemove(null); }}>
+        <AlertDialogContent className="rounded-none border-2 border-foreground">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-serif uppercase font-black tracking-tight">Remove Game?</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm">
+              <span className="font-mono font-bold text-foreground">{pendingRemove?.label}</span> will be removed from this event.
+              Any player picks already submitted for this game will also be permanently deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-none uppercase font-bold text-xs">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="rounded-none uppercase font-bold text-xs bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleConfirmRemove}
+            >
+              Remove Game
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Shell>
   );
 }

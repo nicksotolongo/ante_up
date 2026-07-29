@@ -613,7 +613,9 @@ export const RemoveEventGameParams = zod.object({
   "eventGameId": zod.coerce.number()
 })
 
-export const RemoveEventGameResponse = zod.void()
+export const RemoveEventGameResponse = zod.object({
+  deletedPicksCount: zod.number()
+})
 
 
 /**

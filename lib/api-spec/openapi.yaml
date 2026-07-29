@@ -583,8 +583,12 @@ paths:
           schema:
             type: number
       responses:
-        "204":
+        "200":
           description: Removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RemoveEventGameResult"
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
@@ -827,6 +831,13 @@ components:
             $ref: "#/components/schemas/ApiError"
 
   schemas:
+    RemoveEventGameResult:
+      type: object
+      required: [deletedPicksCount]
+      properties:
+        deletedPicksCount:
+          type: number
+
     HealthStatus:
       type: object
       required: [status]
