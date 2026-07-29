@@ -95,14 +95,13 @@ function WeeklyStandings({ leagueId }: { leagueId: number }) {
     query: { enabled: !!leagueId },
   });
 
-  // Default to the most recent event that has picks activity (non-draft)
+  // All non-draft events, newest first
   const scoreable = (events ?? [])
     .filter((e) => (SCOREABLE_STATUSES as readonly string[]).includes(e.status))
     .sort((a, b) => b.id - a.id);
 
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const eventId = selectedId ?? scoreable[0]?.id ?? null;
-  const selectedEvent = (events ?? []).find((e) => e.id === eventId);
 
   const { data: standings, isLoading } = useGetEventStandings(
     leagueId,
@@ -110,12 +109,8 @@ function WeeklyStandings({ leagueId }: { leagueId: number }) {
     { query: { enabled: !!leagueId && !!eventId } },
   );
 
-  const isLive = selectedEvent && ["open", "locked"].includes(selectedEvent.status);
-  const isRevealed = selectedEvent && ["revealed", "finalized"].includes(selectedEvent.status);
-
   return (
     <div className="space-y-4">
-      {/* Event selector */}
       {scoreable.length > 0 && (
         <div className="flex items-center gap-3">
           <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground shrink-0">Week</span>
@@ -125,20 +120,9 @@ function WeeklyStandings({ leagueId }: { leagueId: number }) {
             className="border border-border bg-card font-bold text-sm px-3 py-1.5 rounded-none focus:outline-none focus:ring-2 focus:ring-foreground w-full"
           >
             {scoreable.map((ev) => (
-              <option key={ev.id} value={ev.id}>
-                {ev.title}{" "}
-                {ev.status === "open" ? "— Live" :
-                 ev.status === "locked" ? "— In Progress" :
-                 ev.status === "revealed" ? "— Results" :
-                 ev.status === "finalized" ? "— Final" : ""}
-              </option>
+              <option key={ev.id} value={ev.id}>{ev.title}</option>
             ))}
           </select>
-          {isLive && (
-            <span className="shrink-0 text-[10px] font-black uppercase tracking-widest bg-green-600 text-white px-2 py-0.5">
-              Live
-            </span>
-          )}
         </div>
       )}
 
@@ -156,11 +140,6 @@ function WeeklyStandings({ leagueId }: { leagueId: number }) {
                 <TableHead className="w-12 text-center font-bold text-xs uppercase tracking-wider text-foreground">#</TableHead>
                 <TableHead className="font-bold text-xs uppercase tracking-wider text-foreground">Player</TableHead>
                 <TableHead className="text-right font-bold text-xs uppercase tracking-wider text-foreground">Pts</TableHead>
-                {isLive && (
-                  <TableHead className="text-right font-bold text-xs uppercase tracking-wider text-foreground hidden sm:table-cell">
-                    Max
-                  </TableHead>
-                )}
                 <TableHead className="text-right font-bold text-xs uppercase tracking-wider text-foreground">Record</TableHead>
                 <TableHead className="text-right font-bold text-xs uppercase tracking-wider text-foreground hidden sm:table-cell">Money</TableHead>
               </TableRow>
@@ -169,36 +148,18 @@ function WeeklyStandings({ leagueId }: { leagueId: number }) {
               {standings.map((entry) => (
                 <TableRow
                   key={entry.userId}
-                  className={[
-                    "hover:bg-muted/30",
-                    entry.rank === 1 ? "bg-yellow-50/30 dark:bg-yellow-900/10" : "",
-                    entry.isEliminated ? "opacity-50" : "",
-                  ].join(" ")}
+                  className={`hover:bg-muted/30 ${entry.rank === 1 ? "bg-yellow-50/30 dark:bg-yellow-900/10" : ""}`}
                 >
-                  <TableCell className="text-center">
-                    <RankBadge rank={entry.rank} />
-                  </TableCell>
+                  <TableCell className="text-center"><RankBadge rank={entry.rank} /></TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Avatar name={entry.displayName} />
-                      <div className="flex flex-col min-w-0">
-                        <span className="font-bold leading-tight">{entry.displayName || "Unknown"}</span>
-                        {entry.isEliminated && isLive && (
-                          <span className="text-[10px] uppercase text-muted-foreground tracking-wider font-bold">
-                            Eliminated
-                          </span>
-                        )}
-                      </div>
+                      <span className="font-bold">{entry.displayName || "Unknown"}</span>
                     </div>
                   </TableCell>
                   <TableCell className="text-right font-mono font-black text-lg tabular-nums">
                     {entry.points}
                   </TableCell>
-                  {isLive && (
-                    <TableCell className="text-right font-mono text-muted-foreground text-sm tabular-nums hidden sm:table-cell">
-                      {entry.maxPossible}
-                    </TableCell>
-                  )}
                   <TableCell className="text-right font-mono">
                     <span className="text-pick-win">{entry.normalCorrect}</span>
                     <span className="text-muted-foreground">-</span>
@@ -206,21 +167,11 @@ function WeeklyStandings({ leagueId }: { leagueId: number }) {
                   </TableCell>
                   <TableCell className="text-right font-mono text-sm hidden sm:table-cell">
                     {entry.moneyCorrect}/{entry.moneyTotal}
-                    {isRevealed && entry.moneyCorrect === 1 && (
-                      <span className="ml-1 text-pick-win text-xs">✓</span>
-                    )}
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
-          {isLive && (
-            <div className="border-t border-border px-4 py-2 bg-secondary/20">
-              <p className="text-[11px] text-muted-foreground uppercase tracking-wide font-bold">
-                Max = maximum achievable points if all remaining picks win
-              </p>
-            </div>
-          )}
         </div>
       )}
     </div>
