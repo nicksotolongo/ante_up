@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams } from "wouter";
+import { useParams, Link } from "wouter";
 import {
   useGetSeasonStandings,
   useGetEventStandings,
@@ -123,6 +123,14 @@ function WeeklyStandings({ leagueId }: { leagueId: number }) {
               <option key={ev.id} value={ev.id}>{ev.title}</option>
             ))}
           </select>
+          {eventId && (
+            <Link
+              href={`/leagues/${leagueId}/board/${eventId}`}
+              className="shrink-0 px-3 py-1.5 bg-foreground text-background text-xs font-black uppercase tracking-widest hover:opacity-80 transition-opacity whitespace-nowrap"
+            >
+              View Board
+            </Link>
+          )}
         </div>
       )}
 
