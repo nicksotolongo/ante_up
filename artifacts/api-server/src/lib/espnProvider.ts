@@ -1,7 +1,7 @@
 /**
  * ESPN public scoreboard API — real game schedules and final scores.
- * Spreads are still deterministic mock values until an odds API is added.
- * No API key required.
+ * Spreads come from The Odds API (ODDS_API_KEY); falls back to mock if unavailable.
+ * No key required for schedules/scores.
  */
 
 export interface NflGame {
@@ -64,7 +64,6 @@ export async function getNflGames(week: number, season: number): Promise<NflGame
 
       const homeTeam = normalizeAbbr(homeComp.team?.abbreviation ?? "");
       const awayTeam = normalizeAbbr(awayComp.team?.abbreviation ?? "");
-      const { spread, favoredTeam } = mockSpread(homeTeam, awayTeam, week, season);
 
       games.push({
         id: event.id,
@@ -74,13 +73,16 @@ export async function getNflGames(week: number, season: number): Promise<NflGame
         awayTeam,
         kickoffAt: new Date(comp.startDate ?? event.date),
         gameStatus,
-        spread,
-        favoredTeam,
+        spread: null,      // filled in below after odds fetch
+        favoredTeam: null,
         homeScore: gameStatus !== "scheduled" ? parseInt(homeComp.score ?? "0", 10) : null,
         awayScore: gameStatus !== "scheduled" ? parseInt(awayComp.score ?? "0", 10) : null,
         updatedAt: new Date(),
       });
     }
+
+    // Overlay real spreads from The Odds API; fall back to mock per game if missing
+    await overlayOdds(games, week, season);
 
     const isFinished = games.length > 0 && games.every(g => g.gameStatus === "final" || g.gameStatus === "postponed");
     cache.set(key, { data: games, fetchedAt: Date.now(), isFinished });
@@ -107,6 +109,28 @@ export async function getNflGameByTeams(
   return games.find(
     g => g.homeTeam === homeTeam && g.awayTeam === awayTeam,
   );
+}
+
+// ---------------------------------------------------------------------------
+// Odds overlay — fetch real spreads and apply them; mock fallback per game
+// ---------------------------------------------------------------------------
+import { fetchNflOdds } from "./oddsProvider";
+
+async function overlayOdds(games: NflGame[], week: number, season: number): Promise<void> {
+  const odds = await fetchNflOdds();
+  for (const g of games) {
+    const match = odds.find(o => o.homeTeam === g.homeTeam && o.awayTeam === g.awayTeam);
+    if (match) {
+      g.spread = match.spread;
+      g.favoredTeam = match.favoredTeam;
+      console.log(`[Odds] ${g.awayTeam} @ ${g.homeTeam}: ${g.spread > 0 ? "+" : ""}${g.spread}`);
+    } else {
+      // Game not in odds feed (finished or off-board) — use mock spread so field is never null
+      const fb = mockSpread(g.homeTeam, g.awayTeam, week, season);
+      g.spread = fb.spread;
+      g.favoredTeam = fb.favoredTeam;
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

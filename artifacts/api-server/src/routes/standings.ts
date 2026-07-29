@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db, eventGamesTable, leagueMembersTable, pickEventsTable, picksTable, submissionsTable, usersTable } from "@workspace/db";
 import { GetSeasonStandingsParams, GetEventStandingsParams } from "@workspace/api-zod";
 
@@ -44,7 +44,7 @@ router.get("/leagues/:leagueId/standings", async (req, res): Promise<void> => {
       };
     }
 
-    const subs = await db.select().from(submissionsTable).where(and(sql`${submissionsTable.pickEventId} = ANY(${eventIds})`, eq(submissionsTable.userId, m.userId)));
+    const subs = await db.select().from(submissionsTable).where(and(inArray(submissionsTable.pickEventId, eventIds), eq(submissionsTable.userId, m.userId)));
     const eventsEntered = subs.length;
 
     let totalPoints = 0;
