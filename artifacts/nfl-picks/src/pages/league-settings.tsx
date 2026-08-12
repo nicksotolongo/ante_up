@@ -1,5 +1,5 @@
-import { useParams } from "wouter";
-import { useGetLeague, useListMembers, useUpdateMember, useRemoveMember, useGenerateInviteCode, MemberUpdateRole } from "@workspace/api-client-react";
+import { useParams, useLocation } from "wouter";
+import { useGetLeague, useListMembers, useUpdateMember, useRemoveMember, useGenerateInviteCode, useDeleteLeague, MemberUpdateRole } from "@workspace/api-client-react";
 import { Shell } from "@/components/layout";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,8 @@ export default function LeagueSettings() {
   const updateMember = useUpdateMember();
   const removeMember = useRemoveMember();
   const generateInvite = useGenerateInviteCode();
+  const deleteLeague = useDeleteLeague();
+  const [, navigate] = useLocation();
 
   const isCommish = league?.userRole === "commissioner";
   const canManage = isCommish || league?.userRole === "deputy";
@@ -60,20 +62,20 @@ export default function LeagueSettings() {
     <Shell title="League Settings" leagueId={leagueId} backTo={`/leagues/${leagueId}`}>
       <div className="space-y-8">
         
-        {isCommish && (
-          <section className="p-6 border border-border bg-card">
-            <h3 className="text-lg font-serif font-bold uppercase mb-4">Invite Code</h3>
-            <div className="flex items-center gap-4">
-              <div className="font-mono text-xl font-black bg-secondary px-4 py-2 border border-border">
-                {league.inviteCode || "None"}
-              </div>
+        <section className="p-6 border border-border bg-card">
+          <h3 className="text-lg font-serif font-bold uppercase mb-4">Invite Code</h3>
+          <div className="flex items-center gap-4">
+            <div className="font-mono text-xl font-black bg-secondary px-4 py-2 border border-border">
+              {league.inviteCode || "None"}
+            </div>
+            {canManage && (
               <Button variant="outline" className="rounded-none border-border" onClick={handleNewInvite}>
                 <Key className="mr-2 h-4 w-4" /> Generate New
               </Button>
-            </div>
-            <p className="text-xs text-muted-foreground mt-2 font-mono uppercase tracking-widest">Share this code with friends to let them join.</p>
-          </section>
-        )}
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground mt-2 font-mono uppercase tracking-widest">Share this code with friends to let them join.</p>
+        </section>
 
         <section>
           <div className="border-b-4 border-foreground pb-2 mb-4">
@@ -86,7 +88,7 @@ export default function LeagueSettings() {
                 <TableRow>
                   <TableHead className="font-bold text-xs uppercase tracking-wider text-foreground">Player</TableHead>
                   <TableHead className="font-bold text-xs uppercase tracking-wider text-foreground">Role</TableHead>
-                  {isCommish && <TableHead className="text-right font-bold text-xs uppercase tracking-wider text-foreground">Actions</TableHead>}
+                  {canManage && <TableHead className="text-right font-bold text-xs uppercase tracking-wider text-foreground">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -101,7 +103,7 @@ export default function LeagueSettings() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {isCommish && m.role !== "commissioner" ? (
+                      {canManage && m.role !== "commissioner" ? (
                         <Select defaultValue={m.role} onValueChange={(val) => handleRoleChange(m.userId, val)}>
                           <SelectTrigger className="w-32 h-8 rounded-none border-border font-mono text-xs uppercase">
                             <SelectValue />
@@ -117,7 +119,7 @@ export default function LeagueSettings() {
                         </Badge>
                       )}
                     </TableCell>
-                    {isCommish && (
+                    {canManage && (
                       <TableCell className="text-right">
                         {m.role !== "commissioner" && (
                           <Button variant="ghost" size="icon" onClick={() => handleRemove(m.userId)} className="h-8 w-8 text-destructive hover:bg-destructive/10">
@@ -132,6 +134,32 @@ export default function LeagueSettings() {
             </Table>
           </div>
         </section>
+
+        {isCommish && (
+          <section className="p-6 border border-destructive/50 bg-card">
+            <h3 className="text-lg font-serif font-bold uppercase mb-2 text-destructive">Danger Zone</h3>
+            <p className="text-xs text-muted-foreground mb-4 font-mono uppercase tracking-widest">Deleting the league permanently removes all events, picks, and standings.</p>
+            <Button
+              variant="destructive"
+              className="rounded-none"
+              disabled={deleteLeague.isPending}
+              onClick={() => {
+                if (!confirm(`Delete "${league.name}" and ALL its data? This cannot be undone.`)) return;
+                if (!confirm("Are you absolutely sure? Every event, pick, and standing in this league will be permanently deleted.")) return;
+                deleteLeague.mutate({ leagueId }, {
+                  onSuccess: () => {
+                    toast({ title: "League deleted" });
+                    queryClient.invalidateQueries();
+                    navigate("/");
+                  },
+                  onError: (err: any) => toast({ title: "Failed to delete league", description: err?.error || "Error", variant: "destructive" }),
+                });
+              }}
+            >
+              <Trash2 className="mr-2 h-4 w-4" /> Delete League
+            </Button>
+          </section>
+        )}
       </div>
     </Shell>
   );

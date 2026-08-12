@@ -3,7 +3,7 @@ import { useGetLeague, useListPickEvents } from "@workspace/api-client-react";
 import { Shell } from "@/components/layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, Calendar, Activity, Trophy } from "lucide-react";
+import { ChevronRight, Calendar, Activity, Trophy, Settings } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 
 export default function LeagueDashboard() {
@@ -155,13 +155,18 @@ export default function LeagueDashboard() {
                   <Trophy className="mr-3 h-4 w-4" /> Season Standings
                 </Button>
               </Link>
-              {league.userRole === 'commissioner' && (
+              {isCommissioner && (
                 <Link href={`/leagues/${leagueId}/commissioner`}>
                   <Button variant="outline" className="w-full justify-start h-12 rounded-none border-border bg-secondary/20">
                     <Activity className="mr-3 h-4 w-4" /> Commissioner Tools
                   </Button>
                 </Link>
               )}
+              <Link href={`/leagues/${leagueId}/settings`}>
+                <Button variant="outline" className="w-full justify-start h-12 rounded-none border-border">
+                  <Settings className="mr-3 h-4 w-4" /> League Settings
+                </Button>
+              </Link>
             </div>
           </section>
         </div>

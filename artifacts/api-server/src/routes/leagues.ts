@@ -55,7 +55,7 @@ router.get("/leagues", async (req, res): Promise<void> => {
       name: league.name,
       slug: league.slug,
       commissionerId: league.commissionerId,
-      inviteCode: league.commissionerId === userId ? league.inviteCode : undefined,
+      inviteCode: league.inviteCode,
       memberCount: Number(memberCount),
       userRole: membership?.role ?? null,
       createdAt: league.createdAt.toISOString(),
@@ -171,7 +171,7 @@ router.get("/leagues/:leagueId", async (req, res): Promise<void> => {
     name: league.name,
     slug: league.slug,
     commissionerId: league.commissionerId,
-    inviteCode: membership.role === "commissioner" ? league.inviteCode : undefined,
+    inviteCode: league.inviteCode,
     memberCount: Number(count),
     userRole: membership.role,
     createdAt: league.createdAt.toISOString(),
@@ -187,7 +187,8 @@ router.patch("/leagues/:leagueId", async (req, res): Promise<void> => {
 
   const [league] = await db.select().from(leaguesTable).where(eq(leaguesTable.id, leagueId));
   if (!league) { res.status(404).json({ error: "League not found" }); return; }
-  if (league.commissionerId !== userId) { res.status(403).json({ error: "Commissioner only" }); return; }
+  const [membership] = await db.select().from(leagueMembersTable).where(and(eq(leagueMembersTable.leagueId, leagueId), eq(leagueMembersTable.userId, userId), eq(leagueMembersTable.status, "active")));
+  if (!membership || !["commissioner", "deputy"].includes(membership.role)) { res.status(403).json({ error: "Commissioner or deputy only" }); return; }
 
   const parsed = UpdateLeagueBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
@@ -195,7 +196,22 @@ router.patch("/leagues/:leagueId", async (req, res): Promise<void> => {
   const [updated] = await db.update(leaguesTable).set(parsed.data).where(eq(leaguesTable.id, leagueId)).returning();
   const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(leagueMembersTable).where(and(eq(leagueMembersTable.leagueId, leagueId), eq(leagueMembersTable.status, "active")));
 
-  res.json({ id: updated.id, name: updated.name, slug: updated.slug, commissionerId: updated.commissionerId, inviteCode: updated.inviteCode, memberCount: Number(count), userRole: "commissioner", createdAt: updated.createdAt.toISOString() });
+  res.json({ id: updated.id, name: updated.name, slug: updated.slug, commissionerId: updated.commissionerId, inviteCode: updated.inviteCode, memberCount: Number(count), userRole: membership.role, createdAt: updated.createdAt.toISOString() });
+});
+
+// DELETE /leagues/:leagueId — delete league (commissioner only)
+router.delete("/leagues/:leagueId", async (req, res): Promise<void> => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const raw = Array.isArray(req.params.leagueId) ? req.params.leagueId[0] : req.params.leagueId;
+  const leagueId = parseInt(raw, 10);
+  const userId = req.user.id;
+
+  const [league] = await db.select().from(leaguesTable).where(eq(leaguesTable.id, leagueId));
+  if (!league) { res.status(404).json({ error: "League not found" }); return; }
+  if (league.commissionerId !== userId) { res.status(403).json({ error: "Commissioner only" }); return; }
+
+  await db.delete(leaguesTable).where(eq(leaguesTable.id, leagueId));
+  res.sendStatus(204);
 });
 
 // POST /leagues/:leagueId/invite — regenerate invite code
@@ -207,7 +223,8 @@ router.post("/leagues/:leagueId/invite", async (req, res): Promise<void> => {
 
   const [league] = await db.select().from(leaguesTable).where(eq(leaguesTable.id, leagueId));
   if (!league) { res.status(404).json({ error: "League not found" }); return; }
-  if (league.commissionerId !== userId) { res.status(403).json({ error: "Commissioner only" }); return; }
+  const [membership] = await db.select().from(leagueMembersTable).where(and(eq(leagueMembersTable.leagueId, leagueId), eq(leagueMembersTable.userId, userId), eq(leagueMembersTable.status, "active")));
+  if (!membership || !["commissioner", "deputy"].includes(membership.role)) { res.status(403).json({ error: "Commissioner or deputy only" }); return; }
 
   const newCode = generateInviteCode();
   await db.update(leaguesTable).set({ inviteCode: newCode }).where(eq(leaguesTable.id, leagueId));

@@ -180,6 +180,16 @@ export const UpdateLeagueResponse = zod.object({
 
 
 /**
+ * @summary Delete league and all its data (commissioner only)
+ */
+export const DeleteLeagueParams = zod.object({
+  "leagueId": zod.coerce.number()
+})
+
+export const DeleteLeagueResponse = zod.void()
+
+
+/**
  * @summary Regenerate invite code (commissioner only)
  */
 export const GenerateInviteCodeParams = zod.object({

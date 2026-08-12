@@ -53,10 +53,13 @@ router.patch("/leagues/:leagueId/members/:userId", async (req, res): Promise<voi
 
   const [league] = await db.select().from(leaguesTable).where(eq(leaguesTable.id, leagueId));
   if (!league) { res.status(404).json({ error: "League not found" }); return; }
-  if (league.commissionerId !== requesterId) { res.status(403).json({ error: "Commissioner only" }); return; }
+  const [requester] = await db.select().from(leagueMembersTable).where(and(eq(leagueMembersTable.leagueId, leagueId), eq(leagueMembersTable.userId, requesterId), eq(leagueMembersTable.status, "active")));
+  if (!requester || !["commissioner", "deputy"].includes(requester.role)) { res.status(403).json({ error: "Commissioner or deputy only" }); return; }
+  if (targetUserId === league.commissionerId) { res.status(400).json({ error: "Cannot change the commissioner's role" }); return; }
 
   const parsed = UpdateMemberBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  if (parsed.data.role === "commissioner") { res.status(400).json({ error: "Cannot assign the commissioner role" }); return; }
 
   const [member] = await db.select().from(leagueMembersTable).where(and(eq(leagueMembersTable.leagueId, leagueId), eq(leagueMembersTable.userId, targetUserId), eq(leagueMembersTable.status, "active")));
   if (!member) { res.status(404).json({ error: "Member not found" }); return; }
@@ -87,8 +90,10 @@ router.delete("/leagues/:leagueId/members/:userId", async (req, res): Promise<vo
 
   const [league] = await db.select().from(leaguesTable).where(eq(leaguesTable.id, leagueId));
   if (!league) { res.status(404).json({ error: "League not found" }); return; }
-  if (league.commissionerId !== requesterId) { res.status(403).json({ error: "Commissioner only" }); return; }
+  const [requester] = await db.select().from(leagueMembersTable).where(and(eq(leagueMembersTable.leagueId, leagueId), eq(leagueMembersTable.userId, requesterId), eq(leagueMembersTable.status, "active")));
+  if (!requester || !["commissioner", "deputy"].includes(requester.role)) { res.status(403).json({ error: "Commissioner or deputy only" }); return; }
   if (targetUserId === requesterId) { res.status(400).json({ error: "Cannot remove yourself" }); return; }
+  if (targetUserId === league.commissionerId) { res.status(400).json({ error: "Cannot remove the commissioner" }); return; }
 
   await db.update(leagueMembersTable).set({ status: "removed" }).where(and(eq(leagueMembersTable.leagueId, leagueId), eq(leagueMembersTable.userId, targetUserId)));
   res.sendStatus(204);
