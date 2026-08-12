@@ -5,6 +5,8 @@ import {
   useCreatePickEvent,
   useGetUpcomingNflGames,
   useAddEventGame,
+  useDeletePickEvent,
+  getListPickEventsQueryKey,
 } from "@workspace/api-client-react";
 import { Shell } from "@/components/layout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -12,6 +14,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Trash2 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -29,6 +32,7 @@ export default function CommissionerDashboard() {
 
   const createEvent = useCreatePickEvent();
   const addGame = useAddEventGame();
+  const deleteEvent = useDeletePickEvent();
 
   // --- create form state ---
   const [name, setName] = useState("");
@@ -156,11 +160,40 @@ export default function CommissionerDashboard() {
                       </div>
                       <h4 className="font-serif font-black uppercase text-lg">{event.name}</h4>
                     </div>
-                    <Link href={`/leagues/${leagueId}/commissioner/${event.id}`}>
-                      <Button variant="outline" className="rounded-none border-border uppercase font-bold text-xs tracking-wider">
-                        Manage
-                      </Button>
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      {event.status === "draft" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="rounded-none text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          disabled={deleteEvent.isPending}
+                          onClick={() => {
+                            if (window.confirm(`Delete draft event "${event.name}"? This cannot be undone.`)) {
+                              deleteEvent.mutate(
+                                { leagueId, eventId: event.id },
+                                {
+                                  onSuccess: () => {
+                                    toast({ title: "Event deleted" });
+                                    queryClient.invalidateQueries({ queryKey: getListPickEventsQueryKey(leagueId) });
+                                  },
+                                  onError: (err: any) => {
+                                    toast({ title: "Failed to delete event", description: err?.message, variant: "destructive" });
+                                  },
+                                }
+                              );
+                            }
+                          }}
+                          title="Delete draft event"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
+                      <Link href={`/leagues/${leagueId}/commissioner/${event.id}`}>
+                        <Button variant="outline" className="rounded-none border-border uppercase font-bold text-xs tracking-wider">
+                          Manage
+                        </Button>
+                      </Link>
+                    </div>
                   </CardContent>
                 </Card>
               ))}

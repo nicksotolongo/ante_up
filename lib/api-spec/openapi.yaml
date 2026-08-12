@@ -445,6 +445,22 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deletePickEvent
+      tags: [pick-events]
+      summary: Delete a draft event (commissioner only)
+      parameters:
+        - $ref: "#/components/parameters/LeagueId"
+        - $ref: "#/components/parameters/EventId"
+      responses:
+        "204":
+          description: Deleted
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
     patch:
       operationId: updatePickEvent
       tags: [pick-events]

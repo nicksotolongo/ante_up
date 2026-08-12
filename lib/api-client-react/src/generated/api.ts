@@ -1624,6 +1624,79 @@ export function useGetPickEvent<TData = Awaited<ReturnType<typeof getPickEvent>>
 
 
 
+export const getDeletePickEventUrl = (leagueId: number,
+    eventId: number,) => {
+
+
+
+
+  return `/api/leagues/${leagueId}/events/${eventId}`
+}
+
+/**
+ * @summary Delete a draft event (commissioner only)
+ */
+export const deletePickEvent = async (leagueId: number,
+    eventId: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeletePickEventUrl(leagueId,eventId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeletePickEventMutationOptions = <TError = ErrorType<BadRequestResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePickEvent>>, TError,{leagueId: number;eventId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deletePickEvent>>, TError,{leagueId: number;eventId: number}, TContext> => {
+
+const mutationKey = ['deletePickEvent'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deletePickEvent>>, {leagueId: number;eventId: number}> = (props) => {
+          const {leagueId,eventId} = props ?? {};
+
+          return  deletePickEvent(leagueId,eventId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeletePickEventMutationResult = NonNullable<Awaited<ReturnType<typeof deletePickEvent>>>
+
+    export type DeletePickEventMutationError = ErrorType<BadRequestResponse | ForbiddenResponse | NotFoundResponse>
+
+    /**
+ * @summary Delete a draft event (commissioner only)
+ */
+export const useDeletePickEvent = <TError = ErrorType<BadRequestResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePickEvent>>, TError,{leagueId: number;eventId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deletePickEvent>>,
+        TError,
+        {leagueId: number;eventId: number},
+        TContext
+      > => {
+      return useMutation(getDeletePickEventMutationOptions(options));
+    }
+
 export const getUpdatePickEventUrl = (leagueId: number,
     eventId: number,) => {
 

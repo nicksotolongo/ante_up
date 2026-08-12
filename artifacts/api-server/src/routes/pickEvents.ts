@@ -12,6 +12,7 @@ import {
   UpdatePickEventBody,
   UpdatePickEventParams,
   ListPickEventsParams,
+  DeletePickEventParams,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -159,6 +160,38 @@ router.patch("/leagues/:leagueId/events/:eventId", async (req, res): Promise<voi
   const [updated] = await db.update(pickEventsTable).set(updates).where(eq(pickEventsTable.id, eventId)).returning();
   const { submissionCount, totalMembers } = await getEventCounts(eventId, leagueId);
   res.json(formatEvent(updated, submissionCount, totalMembers));
+});
+
+// DELETE /leagues/:leagueId/events/:eventId
+router.delete("/leagues/:leagueId/events/:eventId", async (req, res): Promise<void> => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const params = DeletePickEventParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const leagueId = Number(params.data.leagueId);
+  const eventId = Number(params.data.eventId);
+  const userId = req.user.id;
+
+  const member = await requireMember(leagueId, userId);
+  if (!member || (member.role !== "commissioner" && member.role !== "deputy")) {
+    res.status(403).json({ error: "Commissioner only" }); return;
+  }
+
+  const [event] = await db.select().from(pickEventsTable).where(and(eq(pickEventsTable.id, eventId), eq(pickEventsTable.leagueId, leagueId)));
+  if (!event) { res.status(404).json({ error: "Event not found" }); return; }
+  if (event.status !== "draft") { res.status(400).json({ error: "Only draft events can be deleted" }); return; }
+
+  // Delete all associated records in a transaction: picks → submissions → event_games → event
+  await db.transaction(async (tx) => {
+    const subs = await tx.select({ id: submissionsTable.id }).from(submissionsTable).where(eq(submissionsTable.pickEventId, eventId));
+    for (const sub of subs) {
+      await tx.delete(picksTable).where(eq(picksTable.submissionId, sub.id));
+    }
+    await tx.delete(submissionsTable).where(eq(submissionsTable.pickEventId, eventId));
+    await tx.delete(eventGamesTable).where(eq(eventGamesTable.pickEventId, eventId));
+    await tx.delete(pickEventsTable).where(eq(pickEventsTable.id, eventId));
+  });
+
+  res.status(204).send();
 });
 
 // POST /leagues/:leagueId/events/:eventId/lock

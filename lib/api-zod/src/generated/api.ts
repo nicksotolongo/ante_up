@@ -413,6 +413,17 @@ export const GetPickEventResponse = zod.object({
 
 
 /**
+ * @summary Delete a draft event (commissioner only)
+ */
+export const DeletePickEventParams = zod.object({
+  "leagueId": zod.coerce.number(),
+  "eventId": zod.coerce.number()
+})
+
+export const DeletePickEventResponse = zod.void()
+
+
+/**
  * @summary Update pick event (commissioner only)
  */
 export const UpdatePickEventParams = zod.object({
