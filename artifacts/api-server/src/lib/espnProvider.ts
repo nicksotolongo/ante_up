@@ -4,10 +4,13 @@
  * No key required for schedules/scores.
  */
 
+export type NflSeasonType = "preseason" | "regular";
+
 export interface NflGame {
   id: string; // ESPN game ID (e.g. "401671789")
   week: number;
   season: number;
+  seasonType: NflSeasonType;
   homeTeam: string;
   awayTeam: string;
   kickoffAt: Date;
@@ -27,16 +30,24 @@ function isCacheValid(entry: { fetchedAt: number; isFinished: boolean }): boolea
   return Date.now() - entry.fetchedAt < ttl;
 }
 
-export async function getNflGames(week: number, season: number): Promise<NflGame[]> {
-  const key = `${season}-W${week}`;
+function toEspnSeasonType(t: NflSeasonType): number {
+  return t === "preseason" ? 1 : 2;
+}
+
+export async function getNflGames(
+  week: number,
+  season: number,
+  seasonType: NflSeasonType = "regular",
+): Promise<NflGame[]> {
+  const key = `${season}-${seasonType}-W${week}`;
   const cached = cache.get(key);
   if (cached && isCacheValid(cached)) return cached.data;
 
   try {
-    // seasontype=2 = regular season; use dates param for the season year
+    const espnSeasonType = toEspnSeasonType(seasonType);
     const url =
       `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard` +
-      `?seasontype=2&week=${week}&dates=${season}`;
+      `?seasontype=${espnSeasonType}&week=${week}&dates=${season}`;
 
     const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) throw new Error(`ESPN ${res.status}`);
@@ -69,6 +80,7 @@ export async function getNflGames(week: number, season: number): Promise<NflGame
         id: event.id,
         week,
         season,
+        seasonType,
         homeTeam,
         awayTeam,
         kickoffAt: new Date(comp.startDate ?? event.date),
@@ -82,19 +94,25 @@ export async function getNflGames(week: number, season: number): Promise<NflGame
     }
 
     // Overlay real spreads from The Odds API; fall back to mock per game if missing
+    // Preseason lines are often unavailable — mock spread is fine as a fallback
     await overlayOdds(games, week, season);
 
     const isFinished = games.length > 0 && games.every(g => g.gameStatus === "final" || g.gameStatus === "postponed");
     cache.set(key, { data: games, fetchedAt: Date.now(), isFinished });
     return games;
   } catch (err) {
-    console.error(`[ESPN] Failed to fetch Week ${week} ${season}:`, err);
-    return fallbackMockGames(week, season);
+    console.error(`[ESPN] Failed to fetch ${seasonType} Week ${week} ${season}:`, err);
+    return seasonType === "regular" ? fallbackMockGames(week, season) : [];
   }
 }
 
-export async function getNflGame(gameId: string, week: number, season: number): Promise<NflGame | undefined> {
-  const games = await getNflGames(week, season);
+export async function getNflGame(
+  gameId: string,
+  week: number,
+  season: number,
+  seasonType: NflSeasonType = "regular",
+): Promise<NflGame | undefined> {
+  const games = await getNflGames(week, season, seasonType);
   return games.find(g => g.id === gameId);
 }
 
@@ -104,28 +122,85 @@ export async function getNflGameByTeams(
   awayTeam: string,
   week: number,
   season: number,
+  seasonType: NflSeasonType = "regular",
 ): Promise<NflGame | undefined> {
-  const games = await getNflGames(week, season);
+  const games = await getNflGames(week, season, seasonType);
   return games.find(
-    g => g.homeTeam === homeTeam && g.awayTeam === awayTeam,
+    g =>
+      g.homeTeam.toLowerCase() === homeTeam.toLowerCase() &&
+      g.awayTeam.toLowerCase() === awayTeam.toLowerCase(),
   );
 }
 
 // ---------------------------------------------------------------------------
-// Odds overlay — fetch real spreads and apply them; mock fallback per game
+// Current week helpers
 // ---------------------------------------------------------------------------
-import { fetchNflOdds } from "./oddsProvider";
+
+export function getCurrentNflWeek(): { week: number; season: number; seasonType: NflSeasonType } {
+  const now = new Date();
+  const year = now.getFullYear();
+
+  // Preseason runs roughly Aug 1 – Sep 3; regular season starts ~Sep 4
+  const preseasonStart = new Date(year, 7, 1);   // Aug 1
+  const regularSeasonStart = new Date(year, 8, 4); // Sep 4
+
+  if (now >= preseasonStart && now < regularSeasonStart) {
+    const weekNum = Math.min(4, Math.floor((now.getTime() - preseasonStart.getTime()) / (7 * 24 * 3600_000)) + 1);
+    return { week: weekNum, season: year, seasonType: "preseason" };
+  }
+
+  if (now < preseasonStart) {
+    // Off-season: show last regular-season week of prior year
+    return { week: 18, season: year - 1, seasonType: "regular" };
+  }
+
+  const weekNum = Math.min(18, Math.floor((now.getTime() - regularSeasonStart.getTime()) / (7 * 24 * 3600_000)) + 1);
+  return { week: weekNum, season: year, seasonType: "regular" };
+}
+
+/** Returns the next two upcoming NFL weeks (current + next). */
+export function getUpcomingWeeks(): Array<{ week: number; season: number; seasonType: NflSeasonType }> {
+  const current = getCurrentNflWeek();
+  const { week, season, seasonType } = current;
+
+  const maxWeek = seasonType === "preseason" ? 4 : 18;
+
+  if (week < maxWeek) {
+    return [current, { week: week + 1, season, seasonType }];
+  }
+
+  if (seasonType === "preseason") {
+    // Last preseason week → next is regular-season Week 1
+    return [current, { week: 1, season, seasonType: "regular" }];
+  }
+
+  // Last regular-season week — just return current
+  return [current];
+}
+
+// ---------------------------------------------------------------------------
+// Odds overlay
+// ---------------------------------------------------------------------------
 
 async function overlayOdds(games: NflGame[], week: number, season: number): Promise<void> {
-  const odds = await fetchNflOdds();
-  for (const g of games) {
-    const match = odds.find(o => o.homeTeam === g.homeTeam && o.awayTeam === g.awayTeam);
-    if (match) {
-      g.spread = match.spread;
-      g.favoredTeam = match.favoredTeam;
-      console.log(`[Odds] ${g.awayTeam} @ ${g.homeTeam}: ${g.spread > 0 ? "+" : ""}${g.spread}`);
-    } else {
-      // Game not in odds feed (finished or off-board) — use mock spread so field is never null
+  try {
+    const { getOddsForWeek } = await import("./oddsProvider");
+    const oddsMap = await getOddsForWeek(week, season);
+    for (const g of games) {
+      const odds = oddsMap.get(g.id) ?? oddsMap.get(`${g.homeTeam}-${g.awayTeam}`);
+      if (odds) {
+        g.spread = odds.spread;
+        g.favoredTeam = odds.favoredTeam;
+      } else {
+        // Fall back to deterministic mock spread
+        const fb = mockSpread(g.homeTeam, g.awayTeam, week, season);
+        g.spread = fb.spread;
+        g.favoredTeam = fb.favoredTeam;
+      }
+    }
+  } catch (err) {
+    console.warn("[Odds] Failed to overlay odds, using mock spreads:", err);
+    for (const g of games) {
       const fb = mockSpread(g.homeTeam, g.awayTeam, week, season);
       g.spread = fb.spread;
       g.favoredTeam = fb.favoredTeam;
@@ -133,25 +208,16 @@ async function overlayOdds(games: NflGame[], week: number, season: number): Prom
   }
 }
 
-// ---------------------------------------------------------------------------
-// ESPN uses a few different abbreviations than the standard short codes
-// ---------------------------------------------------------------------------
-const ESPN_ABBR_MAP: Record<string, string> = {
-  WSH: "WAS",
-  LVR: "LV",
-  JAC: "JAX",
-};
 function normalizeAbbr(abbr: string): string {
-  return ESPN_ABBR_MAP[abbr.toUpperCase()] ?? abbr.toUpperCase();
+  // ESPN sometimes uses "WSH" or "WAS" interchangeably — normalise a few known cases
+  const map: Record<string, string> = { WSH: "WAS", LA: "LAR" };
+  return map[abbr.toUpperCase()] ?? abbr.toUpperCase();
 }
 
-// ---------------------------------------------------------------------------
-// Mock spread generator — deterministic by teams + week, used until odds API
-// ---------------------------------------------------------------------------
-function hashCode(str: string): number {
+function hashCode(s: string): number {
   let h = 0;
-  for (let i = 0; i < str.length; i++) {
-    h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
   }
   return Math.abs(h);
 }
@@ -182,6 +248,7 @@ function fallbackMockGames(week: number, season: number): NflGame[] {
     id: g.id,
     week: g.week,
     season: g.season,
+    seasonType: "regular" as NflSeasonType,
     homeTeam: g.homeTeam,
     awayTeam: g.awayTeam,
     kickoffAt: g.kickoffAt,
@@ -192,13 +259,4 @@ function fallbackMockGames(week: number, season: number): NflGame[] {
     awayScore: g.awayScore,
     updatedAt: g.updatedAt,
   }));
-}
-
-export function getCurrentNflWeek(): { week: number; season: number } {
-  const now = new Date();
-  const year = now.getFullYear();
-  const seasonStart = new Date(year, 8, 5); // ~Sept 5
-  if (now < seasonStart) return { week: 18, season: year - 1 };
-  const weekNum = Math.min(18, Math.floor((now.getTime() - seasonStart.getTime()) / (7 * 24 * 3600000)) + 1);
-  return { week: weekNum, season: year };
 }

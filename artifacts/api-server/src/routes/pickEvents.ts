@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { and, eq, sql } from "drizzle-orm";
 import { db, eventGamesTable, leagueMembersTable, leaguesTable, picksTable, pickEventsTable, submissionsTable } from "@workspace/db";
-import { getNflGames, getNflGame } from "../lib/espnProvider";
+import { getNflGames, getNflGame, type NflSeasonType } from "../lib/espnProvider";
 import { calculateAtsResult } from "../lib/mockNflGames";
 import {
   CreatePickEventBody,
@@ -23,6 +23,7 @@ function formatEvent(event: typeof pickEventsTable.$inferSelect, submissionCount
     name: event.name,
     nflWeek: event.nflWeek,
     nflSeason: event.nflSeason,
+    nflSeasonType: (event.nflSeasonType ?? "regular") as NflSeasonType,
     status: event.status,
     submissionDeadline: event.submissionDeadline.toISOString(),
     revealAt: event.revealAt.toISOString(),
@@ -90,12 +91,14 @@ router.post("/leagues/:leagueId/events", async (req, res): Promise<void> => {
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
   const { name, nflWeek, nflSeason, submissionDeadline, revealAt, tiebreakerQuestion, notes } = parsed.data;
+  const nflSeasonType: NflSeasonType = ((parsed.data as any).nflSeasonType as NflSeasonType) ?? "regular";
 
   const [event] = await db.insert(pickEventsTable).values({
     leagueId,
     name,
     nflWeek,
     nflSeason,
+    nflSeasonType,
     status: "draft",
     submissionDeadline: new Date(submissionDeadline),
     revealAt: new Date(revealAt),
@@ -197,7 +200,7 @@ router.post("/leagues/:leagueId/events/:eventId/finalize", async (req, res): Pro
 
   // Fetch real scores from ESPN for this week, then grade picks
   const games = await db.select().from(eventGamesTable).where(eq(eventGamesTable.pickEventId, eventId));
-  const espnGames = await getNflGames(event.nflWeek, event.nflSeason);
+  const espnGames = await getNflGames(event.nflWeek, event.nflSeason, (event.nflSeasonType ?? "regular") as NflSeasonType);
 
   let ungradedGameCount = 0;
 

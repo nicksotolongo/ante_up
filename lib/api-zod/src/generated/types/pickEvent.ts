@@ -5,6 +5,7 @@
  * NFL Picks League API
  * OpenAPI spec version: 0.1.0
  */
+import type { PickEventNflSeasonType } from './pickEventNflSeasonType';
 import type { PickEventStatus } from './pickEventStatus';
 
 export interface PickEvent {
@@ -13,6 +14,7 @@ export interface PickEvent {
   name: string;
   nflWeek: number;
   nflSeason: number;
+  nflSeasonType: PickEventNflSeasonType;
   status: PickEventStatus;
   submissionDeadline: Date;
   revealAt: Date;

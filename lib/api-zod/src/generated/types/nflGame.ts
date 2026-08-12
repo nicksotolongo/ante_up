@@ -7,11 +7,13 @@
  */
 import type { NflGameFavoredTeam } from './nflGameFavoredTeam';
 import type { NflGameGameStatus } from './nflGameGameStatus';
+import type { NflGameSeasonType } from './nflGameSeasonType';
 
 export interface NflGame {
   id: string;
   week: number;
   season: number;
+  seasonType: NflGameSeasonType;
   homeTeam: string;
   awayTeam: string;
   kickoffAt: Date;

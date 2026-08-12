@@ -55,7 +55,8 @@ import type {
   SubmissionInput,
   SubmissionUpdate,
   SubmissionsResponse,
-  UnauthorizedResponse
+  UnauthorizedResponse,
+  UpcomingNflWeek
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -1226,6 +1227,83 @@ export function useListNflGames<TData = Awaited<ReturnType<typeof listNflGames>>
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListNflGamesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetUpcomingNflGamesUrl = () => {
+
+
+
+
+  return `/api/nfl-games/upcoming`
+}
+
+/**
+ * @summary Get games for the next two NFL weeks with live lines
+ */
+export const getUpcomingNflGames = async ( options?: Parameters<typeof customFetch>[1]): Promise<UpcomingNflWeek[]> => {
+
+  return customFetch<UpcomingNflWeek[]>(getGetUpcomingNflGamesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetUpcomingNflGamesQueryKey = () => {
+    return [
+    `/api/nfl-games/upcoming`
+    ] as const;
+    }
+
+
+export const getGetUpcomingNflGamesQueryOptions = <TData = Awaited<ReturnType<typeof getUpcomingNflGames>>, TError = ErrorType<UnauthorizedResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUpcomingNflGames>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetUpcomingNflGamesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUpcomingNflGames>>> = ({ signal }) => getUpcomingNflGames({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getUpcomingNflGames>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetUpcomingNflGamesQueryResult = NonNullable<Awaited<ReturnType<typeof getUpcomingNflGames>>>
+export type GetUpcomingNflGamesQueryError = ErrorType<UnauthorizedResponse>
+
+
+/**
+ * @summary Get games for the next two NFL weeks with live lines
+ */
+
+export function useGetUpcomingNflGames<TData = Awaited<ReturnType<typeof getUpcomingNflGames>>, TError = ErrorType<UnauthorizedResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUpcomingNflGames>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetUpcomingNflGamesQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

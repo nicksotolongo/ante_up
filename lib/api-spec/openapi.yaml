@@ -335,6 +335,12 @@ paths:
           required: false
           schema:
             type: number
+        - name: seasonType
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [preseason, regular]
       responses:
         "200":
           description: NFL games with odds
@@ -344,6 +350,23 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/NflGame"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /nfl-games/upcoming:
+    get:
+      operationId: getUpcomingNflGames
+      tags: [nfl-games]
+      summary: Get games for the next two NFL weeks with live lines
+      responses:
+        "200":
+          description: Upcoming weeks with games
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UpcomingNflWeek"
         "401":
           $ref: "#/components/responses/Unauthorized"
 
@@ -968,9 +991,27 @@ components:
           enum: [commissioner, deputy, player]
 
     # ── NFL Games ─────────────────────────────────────────────────────────────
+    UpcomingNflWeek:
+      type: object
+      required: [week, season, seasonType, label, games]
+      properties:
+        week:
+          type: number
+        season:
+          type: number
+        seasonType:
+          type: string
+          enum: [preseason, regular]
+        label:
+          type: string
+        games:
+          type: array
+          items:
+            $ref: "#/components/schemas/NflGame"
+
     NflGame:
       type: object
-      required: [id, week, season, homeTeam, awayTeam, kickoffAt, gameStatus, spread, favoredTeam, updatedAt]
+      required: [id, week, season, seasonType, homeTeam, awayTeam, kickoffAt, gameStatus, spread, favoredTeam, updatedAt]
       properties:
         id:
           type: string
@@ -978,6 +1019,9 @@ components:
           type: number
         season:
           type: number
+        seasonType:
+          type: string
+          enum: [preseason, regular]
         homeTeam:
           type: string
         awayTeam:
@@ -1003,17 +1047,20 @@ components:
 
     CurrentNflWeek:
       type: object
-      required: [week, season]
+      required: [week, season, seasonType]
       properties:
         week:
           type: number
         season:
           type: number
+        seasonType:
+          type: string
+          enum: [preseason, regular]
 
     # ── Pick Events ───────────────────────────────────────────────────────────
     PickEvent:
       type: object
-      required: [id, leagueId, name, nflWeek, nflSeason, status, submissionDeadline, revealAt, createdAt]
+      required: [id, leagueId, name, nflWeek, nflSeason, nflSeasonType, status, submissionDeadline, revealAt, createdAt]
       properties:
         id:
           type: number
@@ -1025,6 +1072,9 @@ components:
           type: number
         nflSeason:
           type: number
+        nflSeasonType:
+          type: string
+          enum: [preseason, regular]
         status:
           type: string
           enum: [draft, open, locked, revealed, finalized]
@@ -1065,6 +1115,9 @@ components:
           type: number
         nflSeason:
           type: number
+        nflSeasonType:
+          type: string
+          enum: [preseason, regular]
         submissionDeadline:
           type: string
           format: date-time

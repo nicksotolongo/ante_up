@@ -5,8 +5,10 @@
  * NFL Picks League API
  * OpenAPI spec version: 0.1.0
  */
+import type { ListNflGamesSeasonType } from './listNflGamesSeasonType';
 
 export type ListNflGamesParams = {
 week?: number;
 season?: number;
+seasonType?: ListNflGamesSeasonType;
 };

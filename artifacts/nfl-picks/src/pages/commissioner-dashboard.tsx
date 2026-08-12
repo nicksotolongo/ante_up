@@ -3,8 +3,7 @@ import {
   useGetLeague,
   useListPickEvents,
   useCreatePickEvent,
-  useGetCurrentNflWeek,
-  useListNflGames,
+  useGetUpcomingNflGames,
   useAddEventGame,
 } from "@workspace/api-client-react";
 import { Shell } from "@/components/layout";
@@ -13,7 +12,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -26,26 +25,17 @@ export default function CommissionerDashboard() {
 
   const { data: league, isLoading: loadingLeague } = useGetLeague(leagueId, { query: { enabled: !!leagueId } });
   const { data: events, isLoading: loadingEvents } = useListPickEvents(leagueId, { query: { enabled: !!leagueId } });
-  const { data: currentWeek } = useGetCurrentNflWeek();
+  const { data: upcomingWeeks, isFetching: loadingGames } = useGetUpcomingNflGames();
 
   const createEvent = useCreatePickEvent();
   const addGame = useAddEventGame();
 
   // --- create form state ---
   const [name, setName] = useState("");
-  const [weekInput, setWeekInput] = useState("");
   const [deadline, setDeadline] = useState("");
   const [revealAt, setRevealAt] = useState("");
   const [tiebreaker, setTiebreaker] = useState("");
   const [selectedGames, setSelectedGames] = useState<Set<string>>(new Set());
-
-  const weekNum = parseInt(weekInput) || undefined;
-  const season = currentWeek?.season;
-
-  const { data: nflGames, isFetching: loadingNflGames } = useListNflGames(
-    { week: weekNum, season },
-    { query: { enabled: !!weekNum && !!season } }
-  );
 
   const toggleGame = (gameId: string) => {
     setSelectedGames(prev => {
@@ -56,18 +46,34 @@ export default function CommissionerDashboard() {
     });
   };
 
-  const canCreate = name && weekNum && deadline && revealAt && selectedGames.size > 0 && !createEvent.isPending;
+  // Derive the event's NFL week/season/seasonType from whichever games are selected
+  const derivedWeekInfo = useMemo(() => {
+    if (!upcomingWeeks || selectedGames.size === 0) return null;
+    for (const w of upcomingWeeks) {
+      for (const g of w.games) {
+        if (selectedGames.has(g.id)) {
+          return { nflWeek: w.week, nflSeason: w.season, nflSeasonType: w.seasonType, label: w.label };
+        }
+      }
+    }
+    return null;
+  }, [upcomingWeeks, selectedGames]);
+
+  const canCreate = name && deadline && revealAt && selectedGames.size > 0 && !createEvent.isPending;
 
   const handleCreateEvent = () => {
-    if (!canCreate || !season) return;
+    if (!canCreate || !derivedWeekInfo) return;
+
+    const allGames = upcomingWeeks?.flatMap(w => w.games) ?? [];
 
     createEvent.mutate(
       {
         leagueId,
         data: {
           name,
-          nflWeek: weekNum!,
-          nflSeason: season,
+          nflWeek: derivedWeekInfo.nflWeek,
+          nflSeason: derivedWeekInfo.nflSeason,
+          nflSeasonType: derivedWeekInfo.nflSeasonType as any,
           submissionDeadline: new Date(deadline).toISOString(),
           revealAt: new Date(revealAt).toISOString(),
           tiebreakerQuestion: tiebreaker || undefined,
@@ -75,8 +81,7 @@ export default function CommissionerDashboard() {
       },
       {
         onSuccess: async (newEvent) => {
-          // Add all selected games sequentially
-          const gamesToAdd = (nflGames ?? []).filter(g => selectedGames.has(g.id));
+          const gamesToAdd = allGames.filter(g => selectedGames.has(g.id));
           for (let i = 0; i < gamesToAdd.length; i++) {
             const g = gamesToAdd[i];
             await new Promise<void>((resolve, reject) => {
@@ -87,8 +92,8 @@ export default function CommissionerDashboard() {
                   data: {
                     nflGameId: g.id,
                     displayOrder: i + 1,
-                    lockedSpread: g.spread,
-                    spreadTeam: g.favoredTeam as any ?? "home",
+                    lockedSpread: g.spread ?? undefined,
+                    spreadTeam: (g.favoredTeam as any) ?? "home",
                   },
                 },
                 { onSuccess: () => resolve(), onError: reject }
@@ -147,7 +152,7 @@ export default function CommissionerDashboard() {
                     <div>
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-xs font-bold uppercase px-2 py-0.5 bg-foreground text-background">
-                          Week {event.nflWeek}
+                          {event.nflSeasonType === "preseason" ? "Preseason" : ""} Week {event.nflWeek}
                         </span>
                         <span className="text-xs font-mono uppercase text-muted-foreground">{event.status}</span>
                       </div>
@@ -180,31 +185,9 @@ export default function CommissionerDashboard() {
                   <Input
                     value={name}
                     onChange={e => setName(e.target.value)}
-                    placeholder="e.g. Week 1 Picks"
+                    placeholder={derivedWeekInfo ? `e.g. ${derivedWeekInfo.label} Picks` : "e.g. Week 1 Picks"}
                     className="rounded-none border-border font-serif text-lg"
                   />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">NFL Week</label>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={18}
-                      value={weekInput}
-                      onChange={e => { setWeekInput(e.target.value); setSelectedGames(new Set()); }}
-                      placeholder={currentWeek?.week.toString() ?? "1"}
-                      className="rounded-none border-border"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Season</label>
-                    <Input
-                      value={season ?? ""}
-                      disabled
-                      className="rounded-none border-border bg-muted"
-                    />
-                  </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -238,66 +221,97 @@ export default function CommissionerDashboard() {
               </CardContent>
             </Card>
 
-            {/* Game slate */}
+            {/* Game slate — live lines for next 2 weeks */}
             <Card className="rounded-none border-2 border-foreground bg-card">
               <CardHeader className="border-b border-border bg-secondary/30">
                 <CardTitle className="font-serif uppercase flex items-center justify-between">
                   <span>Select Games</span>
                   {selectedGames.size > 0 && (
                     <span className="text-sm font-mono font-normal text-muted-foreground">
-                      {selectedGames.size} selected
+                      {selectedGames.size} selected · {derivedWeekInfo?.label}
                     </span>
                   )}
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                {!weekNum ? (
-                  <div className="p-8 text-center text-muted-foreground text-sm uppercase tracking-wider">
-                    Enter an NFL week above to load the game slate
-                  </div>
-                ) : loadingNflGames ? (
+                {loadingGames ? (
                   <div className="p-8 text-center text-muted-foreground text-sm uppercase tracking-wider animate-pulse">
-                    Loading games…
+                    Loading live lines…
                   </div>
-                ) : !nflGames?.length ? (
+                ) : !upcomingWeeks?.length || upcomingWeeks.every(w => w.games.length === 0) ? (
                   <div className="p-8 text-center text-muted-foreground text-sm uppercase tracking-wider">
-                    No games found for Week {weekNum}
+                    No upcoming games found
                   </div>
                 ) : (
-                  <div className="divide-y divide-border">
-                    {nflGames.map(game => {
-                      const checked = selectedGames.has(game.id);
-                      const spreadLabel = game.favoredTeam
-                        ? `${game.favoredTeam === "home" ? game.homeTeam : game.awayTeam} ${game.spread}`
-                        : "PK";
-                      const timeLabel = new Date(game.kickoffAt).toLocaleString("en-US", {
-                        weekday: "short", month: "short", day: "numeric",
-                        hour: "numeric", minute: "2-digit",
-                      });
-                      return (
-                        <button
-                          key={game.id}
-                          type="button"
-                          onClick={() => toggleGame(game.id)}
-                          className={`w-full flex items-center gap-4 p-4 text-left transition-colors ${checked ? "bg-foreground/5" : "hover:bg-muted/40"}`}
-                        >
-                          <Checkbox
-                            checked={checked}
-                            onCheckedChange={() => toggleGame(game.id)}
-                            className="rounded-none w-5 h-5 shrink-0"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="font-mono font-bold text-base">
-                              {game.awayTeam} <span className="text-muted-foreground font-normal">@</span> {game.homeTeam}
-                            </div>
-                            <div className="text-xs uppercase text-muted-foreground mt-0.5 flex gap-3">
-                              <span>{timeLabel}</span>
-                              <span className="font-bold">Line: {spreadLabel}</span>
-                            </div>
+                  <div>
+                    {upcomingWeeks.map(weekGroup => (
+                      weekGroup.games.length === 0 ? null : (
+                        <div key={`${weekGroup.season}-${weekGroup.seasonType}-${weekGroup.week}`}>
+                          {/* Week header */}
+                          <div className="px-4 py-2 bg-foreground/5 border-y border-border flex items-center justify-between">
+                            <span className="text-xs font-bold uppercase tracking-widest text-foreground">
+                              {weekGroup.label}
+                            </span>
+                            <button
+                              type="button"
+                              className="text-xs font-mono text-muted-foreground hover:text-foreground transition-colors uppercase tracking-wider"
+                              onClick={() => {
+                                const allIds = new Set(weekGroup.games.map(g => g.id));
+                                const allSelected = weekGroup.games.every(g => selectedGames.has(g.id));
+                                setSelectedGames(prev => {
+                                  const next = new Set(prev);
+                                  if (allSelected) {
+                                    allIds.forEach(id => next.delete(id));
+                                  } else {
+                                    allIds.forEach(id => next.add(id));
+                                  }
+                                  return next;
+                                });
+                              }}
+                            >
+                              {weekGroup.games.every(g => selectedGames.has(g.id)) ? "Deselect all" : "Select all"}
+                            </button>
                           </div>
-                        </button>
-                      );
-                    })}
+
+                          {/* Games */}
+                          <div className="divide-y divide-border">
+                            {weekGroup.games.map(game => {
+                              const checked = selectedGames.has(game.id);
+                              const spreadLabel = game.favoredTeam
+                                ? `${game.favoredTeam === "home" ? game.homeTeam : game.awayTeam} ${game.spread}`
+                                : "PK";
+                              const timeLabel = new Date(game.kickoffAt).toLocaleString("en-US", {
+                                weekday: "short", month: "short", day: "numeric",
+                                hour: "numeric", minute: "2-digit",
+                              });
+                              return (
+                                <button
+                                  key={game.id}
+                                  type="button"
+                                  onClick={() => toggleGame(game.id)}
+                                  className={`w-full flex items-center gap-4 p-4 text-left transition-colors ${checked ? "bg-foreground/5" : "hover:bg-muted/40"}`}
+                                >
+                                  <Checkbox
+                                    checked={checked}
+                                    onCheckedChange={() => toggleGame(game.id)}
+                                    className="rounded-none w-5 h-5 shrink-0"
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="font-mono font-bold text-base">
+                                      {game.awayTeam} <span className="text-muted-foreground font-normal">@</span> {game.homeTeam}
+                                    </div>
+                                    <div className="text-xs uppercase text-muted-foreground mt-0.5 flex gap-3">
+                                      <span>{timeLabel}</span>
+                                      <span className="font-bold">Line: {spreadLabel}</span>
+                                    </div>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )
+                    ))}
                   </div>
                 )}
               </CardContent>
@@ -306,7 +320,7 @@ export default function CommissionerDashboard() {
             <Button
               className="w-full h-12 rounded-none font-bold uppercase tracking-widest"
               onClick={handleCreateEvent}
-              disabled={!canCreate}
+              disabled={!canCreate || !derivedWeekInfo}
             >
               {createEvent.isPending || addGame.isPending
                 ? `Adding games…`

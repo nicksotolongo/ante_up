@@ -5,12 +5,14 @@
  * NFL Picks League API
  * OpenAPI spec version: 0.1.0
  */
+import type { PickEventInputNflSeasonType } from './pickEventInputNflSeasonType';
 
 export interface PickEventInput {
   /** @minLength 1 */
   name: string;
   nflWeek: number;
   nflSeason: number;
+  nflSeasonType?: PickEventInputNflSeasonType;
   submissionDeadline: Date;
   revealAt: Date;
   tiebreakerQuestion?: string;

@@ -104,6 +104,22 @@ export interface MemberUpdate {
   role: MemberUpdateRole;
 }
 
+export type UpcomingNflWeekSeasonType = typeof UpcomingNflWeekSeasonType[keyof typeof UpcomingNflWeekSeasonType];
+
+
+export const UpcomingNflWeekSeasonType = {
+  preseason: 'preseason',
+  regular: 'regular',
+} as const;
+
+export type NflGameSeasonType = typeof NflGameSeasonType[keyof typeof NflGameSeasonType];
+
+
+export const NflGameSeasonType = {
+  preseason: 'preseason',
+  regular: 'regular',
+} as const;
+
 export type NflGameGameStatus = typeof NflGameGameStatus[keyof typeof NflGameGameStatus];
 
 
@@ -129,6 +145,7 @@ export interface NflGame {
   id: string;
   week: number;
   season: number;
+  seasonType: NflGameSeasonType;
   homeTeam: string;
   awayTeam: string;
   kickoffAt: string;
@@ -144,10 +161,35 @@ export interface NflGame {
   updatedAt: string;
 }
 
+export interface UpcomingNflWeek {
+  week: number;
+  season: number;
+  seasonType: UpcomingNflWeekSeasonType;
+  label: string;
+  games: NflGame[];
+}
+
+export type CurrentNflWeekSeasonType = typeof CurrentNflWeekSeasonType[keyof typeof CurrentNflWeekSeasonType];
+
+
+export const CurrentNflWeekSeasonType = {
+  preseason: 'preseason',
+  regular: 'regular',
+} as const;
+
 export interface CurrentNflWeek {
   week: number;
   season: number;
+  seasonType: CurrentNflWeekSeasonType;
 }
+
+export type PickEventNflSeasonType = typeof PickEventNflSeasonType[keyof typeof PickEventNflSeasonType];
+
+
+export const PickEventNflSeasonType = {
+  preseason: 'preseason',
+  regular: 'regular',
+} as const;
 
 export type PickEventStatus = typeof PickEventStatus[keyof typeof PickEventStatus];
 
@@ -166,6 +208,7 @@ export interface PickEvent {
   name: string;
   nflWeek: number;
   nflSeason: number;
+  nflSeasonType: PickEventNflSeasonType;
   status: PickEventStatus;
   submissionDeadline: string;
   revealAt: string;
@@ -184,11 +227,20 @@ export interface PickEvent {
   createdAt: string;
 }
 
+export type PickEventInputNflSeasonType = typeof PickEventInputNflSeasonType[keyof typeof PickEventInputNflSeasonType];
+
+
+export const PickEventInputNflSeasonType = {
+  preseason: 'preseason',
+  regular: 'regular',
+} as const;
+
 export interface PickEventInput {
   /** @minLength 1 */
   name: string;
   nflWeek: number;
   nflSeason: number;
+  nflSeasonType?: PickEventInputNflSeasonType;
   submissionDeadline: string;
   revealAt: string;
   tiebreakerQuestion?: string;
@@ -564,5 +616,14 @@ returnTo?: string;
 export type ListNflGamesParams = {
 week?: number;
 season?: number;
+seasonType?: ListNflGamesSeasonType;
 };
+
+export type ListNflGamesSeasonType = typeof ListNflGamesSeasonType[keyof typeof ListNflGamesSeasonType];
+
+
+export const ListNflGamesSeasonType = {
+  preseason: 'preseason',
+  regular: 'regular',
+} as const;
 

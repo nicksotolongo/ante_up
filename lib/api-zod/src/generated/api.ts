@@ -253,13 +253,15 @@ export const RemoveMemberResponse = zod.void()
  */
 export const ListNflGamesQueryParams = zod.object({
   "week": zod.coerce.number().optional(),
-  "season": zod.coerce.number().optional()
+  "season": zod.coerce.number().optional(),
+  "seasonType": zod.enum(['preseason', 'regular']).optional()
 })
 
 export const ListNflGamesResponseItem = zod.object({
   "id": zod.string(),
   "week": zod.number(),
   "season": zod.number(),
+  "seasonType": zod.enum(['preseason', 'regular']),
   "homeTeam": zod.string(),
   "awayTeam": zod.string(),
   "kickoffAt": zod.coerce.date(),
@@ -274,11 +276,39 @@ export const ListNflGamesResponse = zod.array(ListNflGamesResponseItem)
 
 
 /**
+ * @summary Get games for the next two NFL weeks with live lines
+ */
+export const GetUpcomingNflGamesResponseItem = zod.object({
+  "week": zod.number(),
+  "season": zod.number(),
+  "seasonType": zod.enum(['preseason', 'regular']),
+  "label": zod.string(),
+  "games": zod.array(zod.object({
+  "id": zod.string(),
+  "week": zod.number(),
+  "season": zod.number(),
+  "seasonType": zod.enum(['preseason', 'regular']),
+  "homeTeam": zod.string(),
+  "awayTeam": zod.string(),
+  "kickoffAt": zod.coerce.date(),
+  "gameStatus": zod.enum(['scheduled', 'in_progress', 'final', 'postponed']),
+  "spread": zod.number().nullable(),
+  "favoredTeam": zod.union([zod.literal('home'),zod.literal('away'),zod.literal(null)]).nullable(),
+  "homeScore": zod.number().nullish(),
+  "awayScore": zod.number().nullish(),
+  "updatedAt": zod.coerce.date()
+}))
+})
+export const GetUpcomingNflGamesResponse = zod.array(GetUpcomingNflGamesResponseItem)
+
+
+/**
  * @summary Get the current NFL week and season
  */
 export const GetCurrentNflWeekResponse = zod.object({
   "week": zod.number(),
-  "season": zod.number()
+  "season": zod.number(),
+  "seasonType": zod.enum(['preseason', 'regular'])
 })
 
 
@@ -295,6 +325,7 @@ export const ListPickEventsResponseItem = zod.object({
   "name": zod.string(),
   "nflWeek": zod.number(),
   "nflSeason": zod.number(),
+  "nflSeasonType": zod.enum(['preseason', 'regular']),
   "status": zod.enum(['draft', 'open', 'locked', 'revealed', 'finalized']),
   "submissionDeadline": zod.coerce.date(),
   "revealAt": zod.coerce.date(),
@@ -324,6 +355,7 @@ export const CreatePickEventBody = zod.object({
   "name": zod.string().min(1),
   "nflWeek": zod.number(),
   "nflSeason": zod.number(),
+  "nflSeasonType": zod.enum(['preseason', 'regular']).optional(),
   "submissionDeadline": zod.coerce.date(),
   "revealAt": zod.coerce.date(),
   "tiebreakerQuestion": zod.string().optional(),
@@ -336,6 +368,7 @@ export const CreatePickEventResponse = zod.object({
   "name": zod.string(),
   "nflWeek": zod.number(),
   "nflSeason": zod.number(),
+  "nflSeasonType": zod.enum(['preseason', 'regular']),
   "status": zod.enum(['draft', 'open', 'locked', 'revealed', 'finalized']),
   "submissionDeadline": zod.coerce.date(),
   "revealAt": zod.coerce.date(),
@@ -364,6 +397,7 @@ export const GetPickEventResponse = zod.object({
   "name": zod.string(),
   "nflWeek": zod.number(),
   "nflSeason": zod.number(),
+  "nflSeasonType": zod.enum(['preseason', 'regular']),
   "status": zod.enum(['draft', 'open', 'locked', 'revealed', 'finalized']),
   "submissionDeadline": zod.coerce.date(),
   "revealAt": zod.coerce.date(),
@@ -404,6 +438,7 @@ export const UpdatePickEventResponse = zod.object({
   "name": zod.string(),
   "nflWeek": zod.number(),
   "nflSeason": zod.number(),
+  "nflSeasonType": zod.enum(['preseason', 'regular']),
   "status": zod.enum(['draft', 'open', 'locked', 'revealed', 'finalized']),
   "submissionDeadline": zod.coerce.date(),
   "revealAt": zod.coerce.date(),
@@ -432,6 +467,7 @@ export const LockPickEventResponse = zod.object({
   "name": zod.string(),
   "nflWeek": zod.number(),
   "nflSeason": zod.number(),
+  "nflSeasonType": zod.enum(['preseason', 'regular']),
   "status": zod.enum(['draft', 'open', 'locked', 'revealed', 'finalized']),
   "submissionDeadline": zod.coerce.date(),
   "revealAt": zod.coerce.date(),
@@ -460,6 +496,7 @@ export const FinalizePickEventResponse = zod.object({
   "name": zod.string(),
   "nflWeek": zod.number(),
   "nflSeason": zod.number(),
+  "nflSeasonType": zod.enum(['preseason', 'regular']),
   "status": zod.enum(['draft', 'open', 'locked', 'revealed', 'finalized']),
   "submissionDeadline": zod.coerce.date(),
   "revealAt": zod.coerce.date(),
@@ -498,6 +535,7 @@ export const ListEventGamesResponseItem = zod.object({
   "id": zod.string(),
   "week": zod.number(),
   "season": zod.number(),
+  "seasonType": zod.enum(['preseason', 'regular']),
   "homeTeam": zod.string(),
   "awayTeam": zod.string(),
   "kickoffAt": zod.coerce.date(),
@@ -544,6 +582,7 @@ export const AddEventGameResponse = zod.object({
   "id": zod.string(),
   "week": zod.number(),
   "season": zod.number(),
+  "seasonType": zod.enum(['preseason', 'regular']),
   "homeTeam": zod.string(),
   "awayTeam": zod.string(),
   "kickoffAt": zod.coerce.date(),
@@ -592,6 +631,7 @@ export const UpdateEventGameResponse = zod.object({
   "id": zod.string(),
   "week": zod.number(),
   "season": zod.number(),
+  "seasonType": zod.enum(['preseason', 'regular']),
   "homeTeam": zod.string(),
   "awayTeam": zod.string(),
   "kickoffAt": zod.coerce.date(),
@@ -771,6 +811,7 @@ export const GetLiveBoardResponse = zod.object({
   "name": zod.string(),
   "nflWeek": zod.number(),
   "nflSeason": zod.number(),
+  "nflSeasonType": zod.enum(['preseason', 'regular']),
   "status": zod.enum(['draft', 'open', 'locked', 'revealed', 'finalized']),
   "submissionDeadline": zod.coerce.date(),
   "revealAt": zod.coerce.date(),
@@ -799,6 +840,7 @@ export const GetLiveBoardResponse = zod.object({
   "id": zod.string(),
   "week": zod.number(),
   "season": zod.number(),
+  "seasonType": zod.enum(['preseason', 'regular']),
   "homeTeam": zod.string(),
   "awayTeam": zod.string(),
   "kickoffAt": zod.coerce.date(),
@@ -906,6 +948,7 @@ export const GetDashboardResponse = zod.object({
   "name": zod.string(),
   "nflWeek": zod.number(),
   "nflSeason": zod.number(),
+  "nflSeasonType": zod.enum(['preseason', 'regular']),
   "status": zod.enum(['draft', 'open', 'locked', 'revealed', 'finalized']),
   "submissionDeadline": zod.coerce.date(),
   "revealAt": zod.coerce.date(),
@@ -927,7 +970,8 @@ export const GetDashboardResponse = zod.object({
 })),
   "currentNflWeek": zod.object({
   "week": zod.number(),
-  "season": zod.number()
+  "season": zod.number(),
+  "seasonType": zod.enum(['preseason', 'regular'])
 })
 })
 

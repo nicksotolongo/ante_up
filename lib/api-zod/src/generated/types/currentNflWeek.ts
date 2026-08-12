@@ -5,8 +5,10 @@
  * NFL Picks League API
  * OpenAPI spec version: 0.1.0
  */
+import type { CurrentNflWeekSeasonType } from './currentNflWeekSeasonType';
 
 export interface CurrentNflWeek {
   week: number;
   season: number;
+  seasonType: CurrentNflWeekSeasonType;
 }

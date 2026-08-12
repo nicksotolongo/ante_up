@@ -10,6 +10,7 @@ export const pickEventsTable = pgTable("pick_events", {
   name: text("name").notNull(),
   nflWeek: serial("nfl_week").notNull(),
   nflSeason: serial("nfl_season").notNull(),
+  nflSeasonType: text("nfl_season_type").notNull().default("regular"), // 'preseason' | 'regular'
   status: text("status").notNull().default("draft"), // draft, open, locked, revealed, finalized
   submissionDeadline: timestamp("submission_deadline", { withTimezone: true }).notNull(),
   revealAt: timestamp("reveal_at", { withTimezone: true }).notNull(),
