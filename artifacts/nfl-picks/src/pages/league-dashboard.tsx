@@ -25,7 +25,7 @@ export default function LeagueDashboard() {
 
   if (!league) return <Shell><div className="p-8 text-center uppercase font-bold text-destructive">League not found</div></Shell>;
 
-  const isCommissioner = league.userRole === "commissioner";
+  const isCommissioner = league.userRole === "commissioner" || league.userRole === "deputy";
   // Commissioners see draft events too so they can publish; players only see open/locked/revealed
   const activeEvent = events?.find(e =>
     isCommissioner

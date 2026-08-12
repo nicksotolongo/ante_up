@@ -23,12 +23,13 @@ export default function LeagueSettings() {
   const generateInvite = useGenerateInviteCode();
 
   const isCommish = league?.userRole === "commissioner";
+  const canManage = isCommish || league?.userRole === "deputy";
 
   if (loadingLeague || loadingMembers) return <Shell leagueId={leagueId} backTo={`/leagues/${leagueId}`}><div className="animate-pulse h-64 bg-muted"></div></Shell>;
   if (!league) return <Shell><div className="p-8 text-center uppercase font-bold text-destructive">League not found</div></Shell>;
 
-  const handleRoleChange = (memberId: number, role: string) => {
-    updateMember.mutate({ leagueId, memberId, data: { role: role as MemberUpdateRole } }, {
+  const handleRoleChange = (userId: string, role: string) => {
+    updateMember.mutate({ leagueId, userId, data: { role: role as MemberUpdateRole } }, {
       onSuccess: () => {
         toast({ title: "Role updated" });
         queryClient.invalidateQueries({ queryKey: ["/api/leagues", leagueId, "members"] });
@@ -36,9 +37,9 @@ export default function LeagueSettings() {
     });
   };
 
-  const handleRemove = (memberId: number) => {
+  const handleRemove = (userId: string) => {
     if (!confirm("Remove this member?")) return;
-    removeMember.mutate({ leagueId, memberId }, {
+    removeMember.mutate({ leagueId, userId }, {
       onSuccess: () => {
         toast({ title: "Member removed" });
         queryClient.invalidateQueries({ queryKey: ["/api/leagues", leagueId, "members"] });
@@ -101,7 +102,7 @@ export default function LeagueSettings() {
                     </TableCell>
                     <TableCell>
                       {isCommish && m.role !== "commissioner" ? (
-                        <Select defaultValue={m.role} onValueChange={(val) => handleRoleChange(m.id, val)}>
+                        <Select defaultValue={m.role} onValueChange={(val) => handleRoleChange(m.userId, val)}>
                           <SelectTrigger className="w-32 h-8 rounded-none border-border font-mono text-xs uppercase">
                             <SelectValue />
                           </SelectTrigger>
@@ -112,14 +113,14 @@ export default function LeagueSettings() {
                         </Select>
                       ) : (
                         <Badge variant="outline" className="rounded-none font-mono uppercase text-[10px] tracking-wider border-border">
-                          {m.role}
+                          {m.role === "deputy" ? "Deputy Commissioner" : m.role}
                         </Badge>
                       )}
                     </TableCell>
                     {isCommish && (
                       <TableCell className="text-right">
                         {m.role !== "commissioner" && (
-                          <Button variant="ghost" size="icon" onClick={() => handleRemove(m.id)} className="h-8 w-8 text-destructive hover:bg-destructive/10">
+                          <Button variant="ghost" size="icon" onClick={() => handleRemove(m.userId)} className="h-8 w-8 text-destructive hover:bg-destructive/10">
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         )}

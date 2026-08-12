@@ -115,7 +115,7 @@ export default function CommissionerDashboard() {
     );
   }
 
-  if (league?.userRole !== "commissioner") {
+  if (!["commissioner", "deputy"].includes(league?.userRole ?? "")) {
     return (
       <Shell leagueId={leagueId} backTo={`/leagues/${leagueId}`}>
         <div className="p-8 text-center text-destructive font-bold uppercase">Unauthorized</div>
