@@ -16,4 +16,5 @@ export interface AuthUser {
   profileImageUrl: string | null;
   /** @nullable */
   displayName?: string | null;
+  canCreateLeagues?: boolean;
 }

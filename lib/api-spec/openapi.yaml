@@ -919,6 +919,8 @@ components:
           type: ["string", "null"]
         displayName:
           type: ["string", "null"]
+        canCreateLeagues:
+          type: boolean
 
     AuthUserEnvelope:
       type: object

@@ -1,6 +1,8 @@
 import { GetCurrentAuthUserResponse } from '@workspace/api-zod';
 import { db, usersTable } from '@workspace/db';
+import { eq } from 'drizzle-orm';
 import { Router, type IRouter, type Request, type Response } from 'express';
+import { isAppAdmin } from '../lib/adminConfig';
 import * as oidc from 'openid-client';
 
 import {
@@ -116,12 +118,13 @@ async function upsertUser(claims: Record<string, unknown>) {
   return user;
 }
 
-router.get('/auth/user', (req: Request, res: Response) => {
-  res.json(
-    GetCurrentAuthUserResponse.parse({
-      user: req.isAuthenticated() ? req.user : null,
-    }),
-  );
+router.get('/auth/user', async (req: Request, res: Response) => {
+  let user = null;
+  if (req.isAuthenticated()) {
+    const [row] = await db.select().from(usersTable).where(eq(usersTable.id, req.user.id));
+    user = { ...req.user, canCreateLeagues: isAppAdmin(row?.email) };
+  }
+  res.json(GetCurrentAuthUserResponse.parse({ user }));
 });
 
 router.get('/login', async (req: Request, res: Response) => {

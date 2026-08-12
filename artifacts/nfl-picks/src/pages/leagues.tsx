@@ -9,6 +9,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Trophy, ChevronRight, Plus, Key, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@workspace/replit-auth-web";
 
 export default function LeagueHub() {
   const { data: dashboard, isLoading } = useGetDashboard();
@@ -16,6 +17,8 @@ export default function LeagueHub() {
   const createLeague = useCreateLeague();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { user } = useAuth();
+  const canCreate = !!(user as any)?.canCreateLeagues;
 
   const [inviteCode, setInviteCode] = useState("");
   const [leagueName, setLeagueName] = useState("");
@@ -95,6 +98,7 @@ export default function LeagueHub() {
               </DialogContent>
             </Dialog>
 
+            {canCreate && (
             <Dialog>
               <DialogTrigger asChild>
                 <Button className="rounded-none w-full sm:w-auto">
@@ -135,6 +139,7 @@ export default function LeagueHub() {
                 </div>
               </DialogContent>
             </Dialog>
+            )}
           </div>
         </div>
 

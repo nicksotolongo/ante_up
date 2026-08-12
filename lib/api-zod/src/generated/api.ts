@@ -29,7 +29,8 @@ export const GetCurrentAuthUserResponse = zod.object({
   "firstName": zod.string().nullable(),
   "lastName": zod.string().nullable(),
   "profileImageUrl": zod.string().nullable(),
-  "displayName": zod.string().nullish()
+  "displayName": zod.string().nullish(),
+  "canCreateLeagues": zod.boolean().optional()
 }),zod.null()])
 })
 

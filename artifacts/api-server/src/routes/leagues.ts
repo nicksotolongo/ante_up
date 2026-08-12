@@ -4,7 +4,9 @@ import { db } from "@workspace/db";
 import {
   leaguesTable,
   leagueMembersTable,
+  usersTable,
 } from "@workspace/db";
+import { isAppAdmin } from "../lib/adminConfig";
 import { CreateLeagueBody, JoinLeagueBody, UpdateLeagueBody } from "@workspace/api-zod";
 import { randomBytes } from "crypto";
 
@@ -79,6 +81,12 @@ router.post("/leagues", async (req, res): Promise<void> => {
   const { name, slug: rawSlug } = parsed.data;
   const slug = rawSlug || generateSlug(name);
   const userId = req.user.id;
+
+  const [userRow] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+  if (!isAppAdmin(userRow?.email)) {
+    res.status(403).json({ error: "Only the app administrator can create leagues" });
+    return;
+  }
 
   // Check slug uniqueness
   const existing = await db.select().from(leaguesTable).where(eq(leaguesTable.slug, slug));
