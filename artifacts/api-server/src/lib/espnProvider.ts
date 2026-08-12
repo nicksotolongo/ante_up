@@ -182,17 +182,18 @@ export function getUpcomingWeeks(): Array<{ week: number; season: number; season
 // Odds overlay
 // ---------------------------------------------------------------------------
 
+import { fetchNflOdds } from "./oddsProvider";
+
 async function overlayOdds(games: NflGame[], week: number, season: number): Promise<void> {
   try {
-    const { getOddsForWeek } = await import("./oddsProvider");
-    const oddsMap = await getOddsForWeek(week, season);
+    const odds = await fetchNflOdds();
     for (const g of games) {
-      const odds = oddsMap.get(g.id) ?? oddsMap.get(`${g.homeTeam}-${g.awayTeam}`);
-      if (odds) {
-        g.spread = odds.spread;
-        g.favoredTeam = odds.favoredTeam;
+      const match = odds.find(o => o.homeTeam === g.homeTeam && o.awayTeam === g.awayTeam);
+      if (match) {
+        g.spread = match.spread;
+        g.favoredTeam = match.favoredTeam;
       } else {
-        // Fall back to deterministic mock spread
+        // No line from Odds API (common for preseason) — fall back to mock
         const fb = mockSpread(g.homeTeam, g.awayTeam, week, season);
         g.spread = fb.spread;
         g.favoredTeam = fb.favoredTeam;

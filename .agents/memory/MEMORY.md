@@ -2,3 +2,4 @@
 - [Orval zod compat](orval-zod-compat.md) — Orval v8.23 generates zod v4 syntax; use `type: number` not `type: integer` and omit `format: email/uri`.
 - [Auth route template](auth-route-template.md) — Mobile auth endpoints must be stripped from auth.ts; those exports don't exist in our spec.
 - [Hook signatures](hook-signatures.md) — All hooks take positional (leagueId, eventId, options); never use object params for path args.
+- [esbuild dynamic import quirk](esbuild-dynamic-import.md) — dynamic import() in bundled API server code silently returns undefined; use static imports.

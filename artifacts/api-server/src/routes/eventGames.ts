@@ -9,7 +9,7 @@ import {
   UpdateEventGameBody,
   UpdateEventGameParams,
 } from "@workspace/api-zod";
-import { getNflGame } from "../lib/espnProvider";
+import { getNflGame, type NflSeasonType } from "../lib/espnProvider";
 import { calculateAtsResult } from "../lib/mockNflGames";
 
 const router: IRouter = Router();
@@ -101,8 +101,9 @@ router.post("/leagues/:leagueId/events/:eventId/games", async (req, res): Promis
   const parsed = AddEventGameBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  // Look up game from ESPN (real schedule) by ID + week/season
-  const espnGame = await getNflGame(parsed.data.nflGameId, event.nflWeek, event.nflSeason);
+  // Look up game from ESPN (real schedule) by ID + week/season/seasonType
+  const seasonType = (event.nflSeasonType ?? "regular") as NflSeasonType;
+  const espnGame = await getNflGame(parsed.data.nflGameId, event.nflWeek, event.nflSeason, seasonType);
   if (!espnGame) { res.status(404).json({ error: "NFL game not found in schedule for this week" }); return; }
 
   const [eg] = await db

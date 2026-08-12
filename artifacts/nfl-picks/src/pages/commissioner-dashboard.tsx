@@ -82,28 +82,26 @@ export default function CommissionerDashboard() {
       {
         onSuccess: async (newEvent) => {
           const gamesToAdd = allGames.filter(g => selectedGames.has(g.id));
-          for (let i = 0; i < gamesToAdd.length; i++) {
-            const g = gamesToAdd[i];
-            await new Promise<void>((resolve, reject) => {
-              addGame.mutate(
-                {
-                  leagueId,
-                  eventId: newEvent.id,
-                  data: {
-                    nflGameId: g.id,
-                    displayOrder: i + 1,
-                    lockedSpread: g.spread ?? undefined,
-                    spreadTeam: (g.favoredTeam as any) ?? "home",
-                  },
+          try {
+            for (let i = 0; i < gamesToAdd.length; i++) {
+              const g = gamesToAdd[i];
+              await addGame.mutateAsync({
+                leagueId,
+                eventId: newEvent.id,
+                data: {
+                  nflGameId: g.id,
+                  displayOrder: i + 1,
+                  lockedSpread: g.spread ?? undefined,
+                  spreadTeam: (g.favoredTeam as any) ?? "home",
                 },
-                { onSuccess: () => resolve(), onError: reject }
-              );
-            });
+              });
+            }
+            toast({ title: `Event created with ${gamesToAdd.length} games` });
+            queryClient.invalidateQueries({ queryKey: ["/api/leagues", leagueId, "events"] });
+            navigate(`/leagues/${leagueId}/commissioner/${newEvent.id}`);
+          } catch (err: any) {
+            toast({ title: "Failed to add games", description: err?.message ?? "Check that the games are in the ESPN schedule", variant: "destructive" });
           }
-
-          toast({ title: `Event created with ${gamesToAdd.length} games` });
-          queryClient.invalidateQueries({ queryKey: ["/api/leagues", leagueId, "events"] });
-          navigate(`/leagues/${leagueId}/commissioner/${newEvent.id}`);
         },
         onError: (err: any) => {
           toast({ title: "Error creating event", description: err?.message, variant: "destructive" });
