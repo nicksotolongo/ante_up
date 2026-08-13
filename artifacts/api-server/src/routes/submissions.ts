@@ -44,7 +44,7 @@ function validatePicksAgainstGames(
   for (const pick of picks) {
     const game = gameMap.get(pick.eventGameId);
     if (!game) return `Pick references unknown game ${pick.eventGameId}`;
-    if (pick.selectedTeam !== game.homeTeam && pick.selectedTeam !== game.awayTeam)
+    if (pick.selectedTeam !== "home" && pick.selectedTeam !== "away")
       return `Invalid team "${pick.selectedTeam}" for game ${pick.eventGameId} (${game.awayTeam} @ ${game.homeTeam})`;
   }
 
