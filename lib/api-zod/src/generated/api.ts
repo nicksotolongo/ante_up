@@ -26,6 +26,7 @@ export const GetCurrentAuthUserHeader = zod.object({
 export const GetCurrentAuthUserResponse = zod.object({
   "user": zod.union([zod.object({
   "id": zod.string(),
+  "email": zod.string().nullish(),
   "firstName": zod.string().nullable(),
   "lastName": zod.string().nullable(),
   "profileImageUrl": zod.string().nullable(),

@@ -20,6 +20,8 @@ export interface ApiError {
 export interface AuthUser {
   id: string;
   /** @nullable */
+  email?: string | null;
+  /** @nullable */
   firstName: string | null;
   /** @nullable */
   lastName: string | null;

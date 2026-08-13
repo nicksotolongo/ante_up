@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { and, eq } from "drizzle-orm";
 import { db, eventGamesTable, leagueMembersTable, pickEventsTable, picksTable, submissionsTable, usersTable } from "@workspace/db";
 import { GetLiveBoardParams } from "@workspace/api-zod";
+import { getNflGames, type NflGame, type NflSeasonType } from "../lib/espnProvider";
 
 const router: IRouter = Router();
 
@@ -20,6 +21,17 @@ router.get("/leagues/:leagueId/events/:eventId/board", async (req, res): Promise
   if (!event) { res.status(404).json({ error: "Event not found" }); return; }
 
   const eventGames = await db.select().from(eventGamesTable).where(eq(eventGamesTable.pickEventId, eventId));
+
+  // Live scores from ESPN (cached ~5 min) — used for games not yet finalized
+  let espnGames: NflGame[] = [];
+  try {
+    espnGames = await getNflGames(event.nflWeek, event.nflSeason, (event.nflSeasonType ?? "regular") as NflSeasonType);
+  } catch {
+    // Board still works without live scores
+  }
+  const findEspn = (eg: typeof eventGamesTable.$inferSelect) =>
+    espnGames.find(g => g.id === eg.nflGameId) ??
+    espnGames.find(g => g.homeTeam === eg.homeTeam && g.awayTeam === eg.awayTeam);
   const submissions = await db.select().from(submissionsTable).where(eq(submissionsTable.pickEventId, eventId));
 
   const now = new Date();
@@ -118,27 +130,51 @@ router.get("/leagues/:leagueId/events/:eventId/board", async (req, res): Promise
       nflWeek: event.nflWeek,
       nflSeason: event.nflSeason,
       status: event.status,
+      nflSeasonType: event.nflSeasonType ?? "regular",
       submissionDeadline: event.submissionDeadline.toISOString(),
       revealAt: event.revealAt.toISOString(),
+      createdAt: event.createdAt.toISOString(),
       tiebreakerQuestion: event.tiebreakerQuestion ?? null,
       tiebreakerResult: event.tiebreakerResult ?? null,
     },
-    games: eventGames.map((eg) => ({
-      id: eg.id,
-      nflGameId: eg.nflGameId,
-      homeTeam: eg.homeTeam,
-      awayTeam: eg.awayTeam,
-      kickoffAt: eg.kickoffAt.toISOString(),
-      lockedSpread: eg.lockedSpread ?? null,
-      spreadTeam: eg.spreadTeam ?? null,
-      result: eg.result ?? null,
-      homeScore: eg.homeScore ?? null,
-      awayScore: eg.awayScore ?? null,
-      isFinalized: eg.isFinalized,
-      displayOrder: eg.displayOrder,
-    })),
+    games: eventGames.map((eg) => {
+      const espn = eg.isFinalized ? undefined : findEspn(eg);
+      // Prefer finalized DB scores; otherwise show live ESPN scores
+      const homeScore = eg.isFinalized ? (eg.homeScore ?? null) : (espn?.homeScore ?? eg.homeScore ?? null);
+      const awayScore = eg.isFinalized ? (eg.awayScore ?? null) : (espn?.awayScore ?? eg.awayScore ?? null);
+      const gameStatus = eg.isFinalized ? "final" : (espn?.gameStatus ?? (homeScore != null ? "in_progress" : "scheduled"));
+      return {
+        id: eg.id,
+        pickEventId: eg.pickEventId,
+        nflGameId: eg.nflGameId,
+        lockedSpread: eg.lockedSpread ?? null,
+        spreadTeam: eg.spreadTeam ?? null,
+        lockedAt: eg.lockedAt?.toISOString() ?? null,
+        displayOrder: eg.displayOrder,
+        result: eg.result ?? null,
+        homeScore,
+        awayScore,
+        isFinalized: eg.isFinalized,
+        createdAt: eg.createdAt.toISOString(),
+        nflGame: {
+          id: eg.nflGameId,
+          week: event.nflWeek,
+          season: event.nflSeason,
+          seasonType: event.nflSeasonType ?? "regular",
+          homeTeam: eg.homeTeam,
+          awayTeam: eg.awayTeam,
+          kickoffAt: eg.kickoffAt.toISOString(),
+          gameStatus,
+          spread: eg.lockedSpread ?? null,
+          favoredTeam: eg.spreadTeam ?? null,
+          homeScore,
+          awayScore,
+          updatedAt: (espn?.updatedAt ?? eg.createdAt).toISOString(),
+        },
+      };
+    }),
     rows,
-    isRevealed,
+    revealed: isRevealed,
   });
 });
 

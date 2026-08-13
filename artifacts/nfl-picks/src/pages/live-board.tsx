@@ -60,14 +60,23 @@ export default function LiveBoardPage() {
                             <br/>@<br/>
                             {game.nflGame?.homeTeam}
                           </div>
-                          {game.result ? (
+                          {game.result && (
                             <div className="text-[10px] uppercase font-bold text-muted-foreground bg-background px-1 border border-border mt-1">
                               {game.result}
                             </div>
-                          ) : (
-                            <div className="text-[10px] font-mono text-muted-foreground mt-1">
-                              {game.nflGame?.homeScore != null ? `${game.nflGame.awayScore}-${game.nflGame.homeScore}` : 'TBD'}
+                          )}
+                          {game.nflGame?.homeScore != null ? (
+                            <div className="text-[10px] font-mono mt-1 flex items-center gap-1">
+                              <span className="font-bold">{game.nflGame.awayScore}-{game.nflGame.homeScore}</span>
+                              {game.nflGame.gameStatus === "in_progress" && (
+                                <span className="uppercase font-bold text-[9px] text-red-600 animate-pulse">Live</span>
+                              )}
+                              {game.nflGame.gameStatus === "final" && (
+                                <span className="uppercase text-[9px] text-muted-foreground">F</span>
+                              )}
                             </div>
+                          ) : (
+                            <div className="text-[10px] font-mono text-muted-foreground mt-1">TBD</div>
                           )}
                         </div>
                       </th>

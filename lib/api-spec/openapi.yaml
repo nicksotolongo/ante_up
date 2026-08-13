@@ -911,6 +911,8 @@ components:
       properties:
         id:
           type: string
+        email:
+          type: ["string", "null"]
         firstName:
           type: ["string", "null"]
         lastName:
