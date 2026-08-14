@@ -116,6 +116,59 @@ export async function getNflGame(
   return games.find(g => g.id === gameId);
 }
 
+// Live score lookup by ESPN game ID via the summary endpoint — robust against
+// events whose stored week doesn't match ESPN's week numbering.
+export interface LiveScore {
+  homeScore: number | null;
+  awayScore: number | null;
+  gameStatus: NflGame["gameStatus"];
+  updatedAt: Date;
+}
+
+const scoreCache = new Map<string, { data: LiveScore | null; fetchedAt: number }>();
+
+export async function getLiveScoreById(gameId: string): Promise<LiveScore | null> {
+  const cached = scoreCache.get(gameId);
+  const ttl = cached?.data?.gameStatus === "final" ? 30 * 60 * 1000 : 5 * 60 * 1000;
+  if (cached && Date.now() - cached.fetchedAt < ttl) return cached.data;
+
+  try {
+    const res = await fetch(
+      `https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=${gameId}`,
+      { signal: AbortSignal.timeout(8000) },
+    );
+    if (!res.ok) throw new Error(`ESPN ${res.status}`);
+    const json = await res.json() as any;
+    const comp = json?.header?.competitions?.[0];
+    if (!comp) throw new Error("No competition in summary");
+
+    const statusName: string = comp.status?.type?.name ?? "";
+    const gameStatus: NflGame["gameStatus"] =
+      statusName === "STATUS_FINAL" || statusName === "STATUS_FINAL_OVERTIME"
+        ? "final"
+        : statusName.includes("STATUS_IN_")
+        ? "in_progress"
+        : statusName === "STATUS_POSTPONED"
+        ? "postponed"
+        : "scheduled";
+
+    const home = comp.competitors?.find((c: any) => c.homeAway === "home");
+    const away = comp.competitors?.find((c: any) => c.homeAway === "away");
+    const data: LiveScore = {
+      homeScore: gameStatus !== "scheduled" && home?.score != null ? parseInt(home.score, 10) : null,
+      awayScore: gameStatus !== "scheduled" && away?.score != null ? parseInt(away.score, 10) : null,
+      gameStatus,
+      updatedAt: new Date(),
+    };
+    scoreCache.set(gameId, { data, fetchedAt: Date.now() });
+    return data;
+  } catch (err) {
+    console.error(`[ESPN] Failed to fetch summary for game ${gameId}:`, err);
+    scoreCache.set(gameId, { data: null, fetchedAt: Date.now() });
+    return null;
+  }
+}
+
 /** Find a game by home+away team names (for matching against DB records). */
 export async function getNflGameByTeams(
   homeTeam: string,

@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { and, eq, sql } from "drizzle-orm";
 import { db, eventGamesTable, leagueMembersTable, leaguesTable, picksTable, pickEventsTable, submissionsTable } from "@workspace/db";
-import { getNflGames, getNflGame, type NflSeasonType } from "../lib/espnProvider";
+import { getLiveScoreById, getNflGames, getNflGame, type NflSeasonType } from "../lib/espnProvider";
 import { calculateAtsResult } from "../lib/mockNflGames";
 import {
   CreatePickEventBody,
@@ -252,6 +252,15 @@ router.post("/leagues/:leagueId/events/:eventId/finalize", async (req, res): Pro
       homeScore = espnGame.homeScore;
       awayScore = espnGame.awayScore;
       result = calculateAtsResult(espnGame.homeScore, espnGame.awayScore, eg.lockedSpread, eg.spreadTeam as "home" | "away");
+    } else if (!espnGame && eg.lockedSpread != null && eg.spreadTeam) {
+      // Weekly scoreboard didn't include this game (stored week may not match ESPN's
+      // numbering) — look the score up directly by ESPN game ID
+      const live = await getLiveScoreById(eg.nflGameId);
+      if (live?.gameStatus === "final" && live.homeScore != null && live.awayScore != null) {
+        homeScore = live.homeScore;
+        awayScore = live.awayScore;
+        result = calculateAtsResult(live.homeScore, live.awayScore, eg.lockedSpread, eg.spreadTeam as "home" | "away");
+      }
     }
 
     if (!result) {

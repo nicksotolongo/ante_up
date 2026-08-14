@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db, eventGamesTable, leagueMembersTable, pickEventsTable, picksTable, submissionsTable, usersTable } from "@workspace/db";
 import { GetLiveBoardParams } from "@workspace/api-zod";
 import { makeDisplayName } from "../lib/displayName";
-import { getNflGames, type NflGame, type NflSeasonType } from "../lib/espnProvider";
+import { getLiveScoreById, getNflGames, type NflGame, type NflSeasonType } from "../lib/espnProvider";
 
 const router: IRouter = Router();
 
@@ -33,6 +33,14 @@ router.get("/leagues/:leagueId/events/:eventId/board", async (req, res): Promise
   const findEspn = (eg: typeof eventGamesTable.$inferSelect) =>
     espnGames.find(g => g.id === eg.nflGameId) ??
     espnGames.find(g => g.homeTeam === eg.homeTeam && g.awayTeam === eg.awayTeam);
+
+  // Fallback: direct score lookup by ESPN game ID for games the weekly scoreboard
+  // didn't include (e.g. the stored week doesn't match ESPN's week numbering)
+  const liveScoreById = new Map<number, Awaited<ReturnType<typeof getLiveScoreById>>>();
+  await Promise.all(eventGames.map(async (eg) => {
+    if (eg.isFinalized || findEspn(eg) || now < eg.kickoffAt) return;
+    liveScoreById.set(eg.id, await getLiveScoreById(eg.nflGameId));
+  }));
   const submissions = await db.select().from(submissionsTable).where(eq(submissionsTable.pickEventId, eventId));
 
   const now = new Date();

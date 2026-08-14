@@ -3,3 +3,4 @@
 - [Auth route template](auth-route-template.md) — Mobile auth endpoints must be stripped from auth.ts; those exports don't exist in our spec.
 - [Hook signatures](hook-signatures.md) — All hooks take positional (leagueId, eventId, options); never use object params for path args.
 - [esbuild dynamic import quirk](esbuild-dynamic-import.md) — dynamic import() in bundled API server code silently returns undefined; use static imports.
+- [ESPN week numbering](espn-week-numbering.md) — ESPN preseason weeks can be off-by-one vs stored event week; match by game ID, not week.

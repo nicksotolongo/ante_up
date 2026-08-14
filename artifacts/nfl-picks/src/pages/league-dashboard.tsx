@@ -63,11 +63,11 @@ export default function LeagueDashboard() {
                         <div className="text-sm font-mono mt-4 text-muted-foreground flex flex-col gap-1">
                           <div className="flex items-center gap-2">
                             <Calendar className="w-4 h-4" />
-                            Deadline: {format(new Date(activeEvent.submissionDeadline), "EEE, MMM d • h:mm a")}
+                            Each game locks at kickoff
                           </div>
                           {activeEvent.status === "open" && (
                             <div className="text-pick-win">
-                              Closes in {formatDistanceToNow(new Date(activeEvent.submissionDeadline))}
+                              Pick every game before it starts
                             </div>
                           )}
                         </div>
