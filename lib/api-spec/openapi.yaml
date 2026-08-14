@@ -1434,6 +1434,8 @@ components:
       properties:
         eventGameId:
           type: number
+        hasPick:
+          type: boolean
         selectedTeam:
           type: ["string", "null"]
           enum: ["home", "away", null]

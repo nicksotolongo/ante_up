@@ -882,6 +882,7 @@ export const GetLiveBoardResponse = zod.object({
   "profileImageUrl": zod.string().nullable(),
   "cells": zod.array(zod.object({
   "eventGameId": zod.number(),
+  "hasPick": zod.boolean().optional(),
   "selectedTeam": zod.union([zod.literal('home'),zod.literal('away'),zod.literal(null)]).nullable(),
   "isMoneyPick": zod.boolean(),
   "result": zod.union([zod.literal('win'),zod.literal('loss'),zod.literal('push'),zod.literal(null)]).nullable(),

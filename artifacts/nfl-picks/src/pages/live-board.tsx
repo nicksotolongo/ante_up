@@ -40,8 +40,8 @@ export default function LiveBoardPage() {
 
         {!revealed ? (
           <div className="p-12 text-center border-2 border-dashed border-border bg-card">
-            <h3 className="text-xl font-serif font-bold uppercase mb-2">Picks are Locked</h3>
-            <p className="text-muted-foreground">The board will be revealed at {new Date(event.revealAt).toLocaleString()}</p>
+            <h3 className="text-xl font-serif font-bold uppercase mb-2">Board Not Available</h3>
+            <p className="text-muted-foreground">The board opens once the event is published. Picks appear as each game kicks off.</p>
           </div>
         ) : (
           <div className="relative border-2 border-foreground bg-card overflow-hidden">
@@ -138,7 +138,11 @@ export default function LiveBoardPage() {
                               bgColor, textColor,
                               cell?.isMoneyPick && "border-[3px] border-foreground money-pick-border"
                             )}>
-                              {cell?.selectedTeam ? (cell.selectedTeam === "away" ? game.nflGame?.awayTeam : game.nflGame?.homeTeam) : "-"}
+                              {cell?.selectedTeam
+                                ? (cell.selectedTeam === "away" ? game.nflGame?.awayTeam : game.nflGame?.homeTeam)
+                                : cell?.hasPick
+                                ? <span title="Pick hidden until kickoff">🔒</span>
+                                : "-"}
                             </div>
                           </td>
                         );

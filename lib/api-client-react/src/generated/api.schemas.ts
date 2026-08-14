@@ -489,6 +489,7 @@ export const BoardCellResult = {
 
 export interface BoardCell {
   eventGameId: number;
+  hasPick?: boolean;
   /** @nullable */
   selectedTeam: BoardCellSelectedTeam;
   isMoneyPick: boolean;

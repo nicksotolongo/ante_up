@@ -97,7 +97,6 @@ router.post("/leagues/:leagueId/events/:eventId/games", async (req, res): Promis
     .where(and(eq(pickEventsTable.id, eventId), eq(pickEventsTable.leagueId, leagueId)));
   if (!event) { res.status(404).json({ error: "Event not found" }); return; }
   if (event.status !== "draft" && event.status !== "open") { res.status(400).json({ error: "Games can only be added while the event is in draft or open" }); return; }
-  if (event.status === "open" && new Date() >= event.submissionDeadline) { res.status(400).json({ error: "Games cannot be added after the pick deadline" }); return; }
 
   const parsed = AddEventGameBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }

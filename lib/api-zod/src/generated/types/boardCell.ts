@@ -10,6 +10,7 @@ import type { BoardCellSelectedTeam } from './boardCellSelectedTeam';
 
 export interface BoardCell {
   eventGameId: number;
+  hasPick?: boolean;
   /** @nullable */
   selectedTeam: BoardCellSelectedTeam;
   isMoneyPick: boolean;

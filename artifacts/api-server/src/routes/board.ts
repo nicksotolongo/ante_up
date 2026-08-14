@@ -36,8 +36,11 @@ router.get("/leagues/:leagueId/events/:eventId/board", async (req, res): Promise
   const submissions = await db.select().from(submissionsTable).where(eq(submissionsTable.pickEventId, eventId));
 
   const now = new Date();
-  // Picks are revealed once the event is locked — at the submission deadline or revealAt, whichever comes first
-  const isRevealed = event.status === "revealed" || event.status === "finalized" || now >= event.submissionDeadline;
+  // Per-game reveal: each game's picks become visible once that game kicks off.
+  // The board itself is always viewable once the event is published.
+  const isRevealed = event.status !== "draft";
+  const isGameRevealed = (eg: typeof eventGamesTable.$inferSelect) =>
+    now >= eg.kickoffAt; // kickoff-only: even a finalized event never reveals a pick before its game starts
 
   // Fetch all members
   const allMembers = await db.select({
@@ -80,6 +83,18 @@ router.get("/leagues/:leagueId/events/:eventId/board", async (req, res): Promise
     const picks = await db.select().from(picksTable).where(eq(picksTable.submissionId, sub.id));
 
     const cells = eventGames.map((eg) => {
+      // Hide picks for games that haven't kicked off — players can still change them
+      if (!isGameRevealed(eg)) {
+        const pick = picks.find((p) => p.eventGameId === eg.id);
+        return {
+          eventGameId: eg.id,
+          selectedTeam: null as string | null,
+          isMoneyPick: false,
+          result: null as string | null,
+          pointsAwarded: null as number | null,
+          hasPick: !!pick,
+        };
+      }
       const pick = picks.find((p) => p.eventGameId === eg.id);
       const isMoneyPick = sub.moneyPickGameId === eg.id;
       return {
@@ -88,6 +103,7 @@ router.get("/leagues/:leagueId/events/:eventId/board", async (req, res): Promise
         isMoneyPick,
         result: pick?.result ?? null,
         pointsAwarded: pick?.pointsAwarded ?? null,
+        hasPick: !!pick,
       };
     });
 
@@ -111,8 +127,13 @@ router.get("/leagues/:leagueId/events/:eventId/board", async (req, res): Promise
       maxPossiblePoints,
       rank: 0,
       isEliminated: false,
-      tiebreakerAnswer: sub.tiebreakerAnswer ?? null,
-      moneyPickGameId: sub.moneyPickGameId ?? null,
+      // Tiebreaker stays hidden until every game has kicked off (it's still editable before then)
+      tiebreakerAnswer: eventGames.every(isGameRevealed) ? (sub.tiebreakerAnswer ?? null) : null,
+      // Money pick stays hidden until its game kicks off
+      moneyPickGameId: (() => {
+        const moneyGame = eventGames.find((eg) => eg.id === sub.moneyPickGameId);
+        return moneyGame && isGameRevealed(moneyGame) ? sub.moneyPickGameId : null;
+      })(),
     };
   }));
 

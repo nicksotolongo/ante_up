@@ -68,19 +68,35 @@ export default function PlayerPicksForm() {
     );
   }
 
-  const deadlinePassed = Date.now() >= new Date(event.submissionDeadline).getTime();
-  const isLocked = event.status !== "open" || deadlinePassed; // past deadline or locked/revealed/finalized all block edits
+  const isLocked = event.status !== "open"; // locked, revealed, finalized all block edits
   const hasSubmitted = !!submissionEnvelope?.submission;
-  const allPicked = games.every(g => picks[g.id]);
+
+  // Each game locks at its own kickoff
+  const isGameLocked = (g: (typeof games)[number]) =>
+    isLocked || Date.now() >= new Date(g.nflGame?.kickoffAt ?? 0).getTime();
+  const openGames = games.filter(g => !isGameLocked(g));
+  const moneyGame = games.find(g => g.id === moneyPick);
+  const moneyLocked = !!moneyGame && isGameLocked(moneyGame) && hasSubmitted;
+
+  const allPicked = openGames.every(g => picks[g.id]);
   const isValid = allPicked && moneyPick && (event.tiebreakerQuestion ? tiebreaker.trim() !== "" : true);
 
   const handleSave = () => {
     if (!isValid) return;
 
-    const picksArray: PickInput[] = Object.entries(picks).map(([gameId, team]) => ({
-      eventGameId: parseInt(gameId),
-      selectedTeam: team
-    }));
+    // Send picks for open games plus any existing picks on locked games (unchanged)
+    const picksArray: PickInput[] = Object.entries(picks)
+      .filter(([gameId]) => {
+        const g = games.find(gm => gm.id === parseInt(gameId));
+        if (!g) return false;
+        if (!isGameLocked(g)) return true;
+        // locked game: only resend if it was part of the saved submission
+        return !!submissionEnvelope?.submission?.picks.find(p => p.eventGameId === g.id);
+      })
+      .map(([gameId, team]) => ({
+        eventGameId: parseInt(gameId),
+        selectedTeam: team
+      }));
 
     const data = {
       picks: picksArray,
@@ -120,12 +136,14 @@ export default function PlayerPicksForm() {
   };
 
   const togglePick = (gameId: number, team: PickInputSelectedTeam) => {
-    if (isLocked) return;
+    const g = games.find(gm => gm.id === gameId);
+    if (!g || isGameLocked(g)) return;
     setPicks(prev => ({ ...prev, [gameId]: team }));
   };
 
   const toggleMoneyPick = (gameId: number) => {
-    if (isLocked) return;
+    const g = games.find(gm => gm.id === gameId);
+    if (!g || isGameLocked(g) || moneyLocked) return;
     setMoneyPick(prev => prev === gameId ? null : gameId);
   };
 
@@ -136,7 +154,7 @@ export default function PlayerPicksForm() {
           <div>
             <h2 className="text-2xl font-serif font-black uppercase tracking-tight">{event.name}</h2>
             <div className="text-sm font-mono text-muted-foreground uppercase mt-1">
-              Deadline: {format(new Date(event.submissionDeadline), "EEE, MMM d • h:mm a")}
+              Each game locks at kickoff
             </div>
           </div>
           {isLocked && <div className="bg-destructive text-destructive-foreground px-3 py-1 font-bold uppercase text-xs">Locked</div>}
@@ -161,13 +179,25 @@ export default function PlayerPicksForm() {
             
             const isMoney = moneyPick === game.id;
             const pickedTeam = picks[game.id];
+            const gameLocked = isGameLocked(game);
 
             return (
               <Card key={game.id} className={cn(
                 "rounded-none border-2 transition-all",
                 isMoney ? "border-foreground" : "border-border",
-                isLocked ? "opacity-90" : "hover:border-foreground/50"
+                gameLocked ? "opacity-90" : "hover:border-foreground/50"
               )}>
+                {gameLocked && (
+                  <div className="bg-secondary/60 text-muted-foreground text-[10px] font-mono font-bold uppercase tracking-widest px-3 py-1 border-b border-border flex justify-between">
+                    <span>Locked — kicked off</span>
+                    <span>{format(new Date(game.nflGame?.kickoffAt ?? 0), "EEE h:mm a")}</span>
+                  </div>
+                )}
+                {!gameLocked && (
+                  <div className="bg-card text-muted-foreground text-[10px] font-mono uppercase tracking-widest px-3 py-1 border-b border-border">
+                    Locks {format(new Date(game.nflGame?.kickoffAt ?? 0), "EEE, MMM d • h:mm a")}
+                  </div>
+                )}
                 <CardContent className="p-0 flex flex-col sm:flex-row">
                   <div className="flex-1 grid grid-cols-2">
                     {/* Away Team */}
@@ -175,7 +205,7 @@ export default function PlayerPicksForm() {
                       className={cn(
                         "p-4 flex flex-col items-center justify-center cursor-pointer border-r border-border transition-colors",
                         pickedTeam === "away" ? "bg-foreground text-background" : "bg-card hover:bg-muted/50",
-                        isLocked && "cursor-default pointer-events-none"
+                        gameLocked && "cursor-default pointer-events-none"
                       )}
                       onClick={() => togglePick(game.id, "away")}
                     >
@@ -189,7 +219,7 @@ export default function PlayerPicksForm() {
                       className={cn(
                         "p-4 flex flex-col items-center justify-center cursor-pointer transition-colors",
                         pickedTeam === "home" ? "bg-foreground text-background" : "bg-card hover:bg-muted/50",
-                        isLocked && "cursor-default pointer-events-none"
+                        gameLocked && "cursor-default pointer-events-none"
                       )}
                       onClick={() => togglePick(game.id, "home")}
                     >
@@ -204,7 +234,7 @@ export default function PlayerPicksForm() {
                     className={cn(
                       "sm:w-32 border-t sm:border-t-0 sm:border-l border-border flex items-center justify-center p-3 cursor-pointer select-none transition-colors",
                       isMoney ? "bg-foreground text-background font-black" : "bg-secondary/30 text-muted-foreground hover:bg-secondary",
-                      isLocked && "cursor-default pointer-events-none"
+                      (gameLocked || moneyLocked) && "cursor-default pointer-events-none"
                     )}
                     onClick={() => toggleMoneyPick(game.id)}
                   >
