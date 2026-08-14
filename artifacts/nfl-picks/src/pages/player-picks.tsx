@@ -25,6 +25,13 @@ export default function PlayerPicksForm() {
   const [picks, setPicks] = useState<Record<number, PickInputSelectedTeam>>({});
   const [moneyPick, setMoneyPick] = useState<number | null>(null);
   const [tiebreaker, setTiebreaker] = useState<string>("");
+  const [, setNowTick] = useState(0);
+
+  // Re-render every 15s so the form locks itself the moment the deadline passes
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(n => n + 1), 15000);
+    return () => clearInterval(t);
+  }, []);
 
   const submitPicks = useSubmitPicks();
   const updateSubmission = useUpdateSubmission();
@@ -61,7 +68,8 @@ export default function PlayerPicksForm() {
     );
   }
 
-  const isLocked = event.status !== "open"; // locked, revealed, finalized all block new submissions
+  const deadlinePassed = Date.now() >= new Date(event.submissionDeadline).getTime();
+  const isLocked = event.status !== "open" || deadlinePassed; // past deadline or locked/revealed/finalized all block edits
   const hasSubmitted = !!submissionEnvelope?.submission;
   const allPicked = games.every(g => picks[g.id]);
   const isValid = allPicked && moneyPick && (event.tiebreakerQuestion ? tiebreaker.trim() !== "" : true);

@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { makeDisplayName } from "../lib/displayName";
 import { and, eq, or, sql } from "drizzle-orm";
 import { db, leagueMembersTable, pickEventsTable, picksTable, submissionsTable, usersTable } from "@workspace/db";
 import { GetSeasonStandingsParams, GetEventStandingsParams } from "@workspace/api-zod";
@@ -20,6 +21,7 @@ router.get("/leagues/:leagueId/standings", async (req, res): Promise<void> => {
     db.select({
       userId: leagueMembersTable.userId,
       firstName: usersTable.firstName,
+      email: usersTable.email,
       lastName: usersTable.lastName,
       profileImageUrl: usersTable.profileImageUrl,
     }).from(leagueMembersTable).innerJoin(usersTable, eq(usersTable.id, leagueMembersTable.userId)).where(and(eq(leagueMembersTable.leagueId, leagueId), eq(leagueMembersTable.status, "active"))),
@@ -32,7 +34,7 @@ router.get("/leagues/:leagueId/standings", async (req, res): Promise<void> => {
   if (eventIds.length === 0) {
     const standings = allMembers.map((m, i) => ({
       userId: m.userId,
-      displayName: [m.firstName, m.lastName].filter(Boolean).join(" ") || m.userId,
+      displayName: makeDisplayName(m),
       profileImageUrl: m.profileImageUrl ?? null,
       totalPoints: 0, eventsEntered: 0, weeklyWins: 0,
       normalCorrect: 0, normalTotal: 0, moneyCorrect: 0, moneyTotal: 0, rank: i + 1,
@@ -85,7 +87,7 @@ router.get("/leagues/:leagueId/standings", async (req, res): Promise<void> => {
 
     return {
       userId: m.userId,
-      displayName: [m.firstName, m.lastName].filter(Boolean).join(" ") || m.userId,
+      displayName: makeDisplayName(m),
       profileImageUrl: m.profileImageUrl ?? null,
       totalPoints, eventsEntered: mySubs.length, weeklyWins,
       normalCorrect, normalTotal, moneyCorrect, moneyTotal, rank: 0,
@@ -118,6 +120,7 @@ router.get("/leagues/:leagueId/events/:eventId/standings", async (req, res): Pro
     db.select({
       userId: leagueMembersTable.userId,
       firstName: usersTable.firstName,
+      email: usersTable.email,
       lastName: usersTable.lastName,
       profileImageUrl: usersTable.profileImageUrl,
     }).from(leagueMembersTable).innerJoin(usersTable, eq(usersTable.id, leagueMembersTable.userId)).where(and(eq(leagueMembersTable.leagueId, leagueId), eq(leagueMembersTable.status, "active"))),
@@ -131,7 +134,7 @@ router.get("/leagues/:leagueId/events/:eventId/standings", async (req, res): Pro
 
   const standings = allMembers.map((m) => {
     const sub = allSubs.find(s => s.userId === m.userId);
-    const displayName = [m.firstName, m.lastName].filter(Boolean).join(" ") || m.userId;
+    const displayName = makeDisplayName(m);
     const base = { userId: m.userId, displayName, profileImageUrl: m.profileImageUrl ?? null };
 
     if (!sub) {

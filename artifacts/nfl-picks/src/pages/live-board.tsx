@@ -60,6 +60,11 @@ export default function LiveBoardPage() {
                             <br/>@<br/>
                             {game.nflGame?.homeTeam}
                           </div>
+                          {game.lockedSpread != null && game.spreadTeam && (
+                            <div className="text-[10px] font-mono text-muted-foreground">
+                              {game.spreadTeam === "away" ? game.nflGame?.awayTeam : game.nflGame?.homeTeam} {game.lockedSpread > 0 ? "+" : ""}{game.lockedSpread}
+                            </div>
+                          )}
                           {game.result && (
                             <div className="text-[10px] uppercase font-bold text-muted-foreground bg-background px-1 border border-border mt-1">
                               {game.result}
@@ -89,7 +94,7 @@ export default function LiveBoardPage() {
                     <th className="p-3 text-center font-bold uppercase tracking-wider text-[10px] border-l-2 border-foreground sticky right-0 z-10 bg-secondary/90 w-16">
                       Pts
                     </th>
-                    <th className="p-3 text-center font-bold uppercase tracking-wider text-[10px] border-l border-border bg-secondary/50 w-16 hidden sm:table-cell">
+                    <th className="p-3 text-center font-bold uppercase tracking-wider text-[10px] border-l border-border bg-secondary/50 w-16">
                       Max
                     </th>
                     <th className="p-3 text-center font-bold uppercase tracking-wider text-[10px] border-l border-border bg-secondary/50 w-16 hidden sm:table-cell">
@@ -138,15 +143,15 @@ export default function LiveBoardPage() {
                           </td>
                         );
                       })}
-                      <td className="p-2 text-center font-mono font-black border-l-2 border-foreground sticky right-0 z-10 bg-card text-lg">
-                        {row.currentPoints}
-                      </td>
                       {event.tiebreakerQuestion && (
                         <td className="p-2 text-center font-mono text-muted-foreground border-l border-border hidden sm:table-cell">
                           {row.tiebreakerAnswer ?? "—"}
                         </td>
                       )}
-                      <td className="p-2 text-center font-mono text-muted-foreground border-l border-border hidden sm:table-cell">
+                      <td className="p-2 text-center font-mono font-black border-l-2 border-foreground sticky right-0 z-10 bg-card text-lg">
+                        {row.currentPoints}
+                      </td>
+                      <td className="p-2 text-center font-mono text-muted-foreground border-l border-border">
                         {row.maxPossiblePoints}
                       </td>
                       <td className="p-2 text-center font-mono font-bold border-l border-border hidden sm:table-cell">

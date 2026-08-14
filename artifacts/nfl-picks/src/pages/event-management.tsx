@@ -240,16 +240,22 @@ export default function EventManagement() {
         </TabsContent>
 
         <TabsContent value="feed" className="space-y-4">
-          {event.status !== "draft" ? (
-            <div className="p-8 text-center border border-border bg-card text-sm text-destructive uppercase font-bold">Games cannot be modified after publishing.</div>
+          {event.status !== "draft" && event.status !== "open" ? (
+            <div className="p-8 text-center border border-border bg-card text-sm text-destructive uppercase font-bold">Games cannot be modified after the event is locked.</div>
           ) : (
             <div className="grid gap-2">
+              {event.status === "open" && (
+                <div className="p-3 border border-border bg-secondary/30 text-xs font-mono uppercase text-muted-foreground">
+                  Event is live — you can add new games, but existing games can't be removed.
+                </div>
+              )}
               {nflGames?.map(game => {
                 const isIncluded = !!eventGames?.find(eg => eg.nflGameId === game.id);
                 return (
                   <div key={game.id} className="flex items-center gap-4 p-4 border border-border bg-card">
                     <Checkbox 
                       checked={isIncluded} 
+                      disabled={isIncluded && event.status !== "draft"}
                       onCheckedChange={() => handleToggleGame(game.id, isIncluded, game.spread, game.favoredTeam, `${game.awayTeam} @ ${game.homeTeam}`)}
                       className="rounded-none w-5 h-5"
                     />

@@ -119,7 +119,7 @@ router.get("/leagues/:leagueId/events/:eventId/submissions", async (req, res): P
   const subs = await db.select().from(submissionsTable).where(eq(submissionsTable.pickEventId, eventId));
 
   const now = new Date();
-  const isRevealed = event.status === "revealed" || event.status === "finalized" || now >= event.revealAt;
+  const isRevealed = event.status === "revealed" || event.status === "finalized" || now >= event.submissionDeadline;
 
   if (!isRevealed) {
     // Before reveal: only count, no picks
@@ -174,7 +174,7 @@ router.post("/leagues/:leagueId/events/:eventId/submissions", async (req, res): 
   if (event.status !== "open") { res.status(400).json({ error: "Event is not open for submissions" }); return; }
 
   const now = new Date();
-  if (now > event.submissionDeadline) { res.status(400).json({ error: "Submission deadline has passed" }); return; }
+  if (now >= event.submissionDeadline) { res.status(400).json({ error: "Submission deadline has passed" }); return; }
 
   // Check if already submitted
   const [existing] = await db.select().from(submissionsTable).where(and(eq(submissionsTable.pickEventId, eventId), eq(submissionsTable.userId, userId)));
@@ -220,7 +220,7 @@ router.patch("/leagues/:leagueId/events/:eventId/submissions/:submissionId", asy
   if (!event) { res.status(404).json({ error: "Event not found" }); return; }
 
   const now = new Date();
-  if (now > event.submissionDeadline) { res.status(400).json({ error: "Submission deadline has passed — picks are locked" }); return; }
+  if (now >= event.submissionDeadline) { res.status(400).json({ error: "Submission deadline has passed — picks are locked" }); return; }
 
   const [sub] = await db.select().from(submissionsTable).where(and(eq(submissionsTable.id, submissionId), eq(submissionsTable.pickEventId, eventId)));
   if (!sub) { res.status(404).json({ error: "Submission not found" }); return; }

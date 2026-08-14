@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { and, eq } from "drizzle-orm";
 import { db, eventGamesTable, leagueMembersTable, pickEventsTable, picksTable, submissionsTable, usersTable } from "@workspace/db";
 import { GetLiveBoardParams } from "@workspace/api-zod";
+import { makeDisplayName } from "../lib/displayName";
 import { getNflGames, type NflGame, type NflSeasonType } from "../lib/espnProvider";
 
 const router: IRouter = Router();
@@ -35,20 +36,22 @@ router.get("/leagues/:leagueId/events/:eventId/board", async (req, res): Promise
   const submissions = await db.select().from(submissionsTable).where(eq(submissionsTable.pickEventId, eventId));
 
   const now = new Date();
-  const isRevealed = event.status === "revealed" || event.status === "finalized" || now >= event.revealAt;
+  // Picks are revealed once the event is locked — at the submission deadline or revealAt, whichever comes first
+  const isRevealed = event.status === "revealed" || event.status === "finalized" || now >= event.submissionDeadline;
 
   // Fetch all members
   const allMembers = await db.select({
     id: leagueMembersTable.id,
     userId: leagueMembersTable.userId,
     firstName: usersTable.firstName,
+      email: usersTable.email,
     lastName: usersTable.lastName,
     profileImageUrl: usersTable.profileImageUrl,
   }).from(leagueMembersTable).innerJoin(usersTable, eq(usersTable.id, leagueMembersTable.userId)).where(and(eq(leagueMembersTable.leagueId, leagueId), eq(leagueMembersTable.status, "active")));
 
   const rows = await Promise.all(allMembers.map(async (m) => {
     const sub = submissions.find((s) => s.userId === m.userId);
-    const displayName = [m.firstName, m.lastName].filter(Boolean).join(" ") || m.userId;
+    const displayName = makeDisplayName(m);
 
     if (!sub || !isRevealed) {
       // No submission or not yet revealed — blank row
@@ -92,6 +95,7 @@ router.get("/leagues/:leagueId/events/:eventId/board", async (req, res): Promise
     const pendingGames = eventGames.filter((eg) => !eg.isFinalized);
     const maxFromPending = pendingGames.reduce((sum, eg) => {
       const pick = picks.find((p) => p.eventGameId === eg.id);
+      if (!pick) return sum; // no pick on this game (e.g. added after they submitted) — can't earn points from it
       const isMoneyPick = sub.moneyPickGameId === eg.id;
       return sum + (isMoneyPick ? 2 : 1);
     }, 0);
