@@ -23,10 +23,17 @@ export default function EventManagement() {
   const { data: eventGames, isLoading: loadingGames } = useListEventGames(leagueId, eventId, { query: { enabled: !!leagueId && !!eventId } });
   const { data: board } = useGetLiveBoard(leagueId, eventId, { query: { enabled: !!leagueId && !!eventId } });
   
-  const { data: nflGames } = useListNflGames(
-    { week: event?.nflWeek, season: event?.nflSeason }, 
+  const { data: eventWeekGames } = useListNflGames(
+    { week: event?.nflWeek, season: event?.nflSeason, seasonType: event?.nflSeasonType ?? undefined },
     { query: { enabled: !!event?.nflWeek } }
   );
+  // Fallback: if the event's stored week doesn't match ESPN's numbering (empty list),
+  // show the current NFL week's slate so games can still be added
+  const { data: currentWeekGames } = useListNflGames(
+    {},
+    { query: { enabled: !!event && eventWeekGames != null && eventWeekGames.length === 0 } }
+  );
+  const nflGames = eventWeekGames?.length ? eventWeekGames : currentWeekGames;
 
   const addGame = useAddEventGame();
   const removeGame = useRemoveEventGame();
