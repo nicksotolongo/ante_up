@@ -94,6 +94,14 @@ export interface LeagueMember {
   profileImageUrl?: string | null;
 }
 
+export interface CurrentUserUpdate {
+  /**
+     * Pass null to clear the override and fall back to your account name.
+     * @nullable
+     */
+  displayName?: string | null;
+}
+
 export type MemberUpdateRole = typeof MemberUpdateRole[keyof typeof MemberUpdateRole];
 
 
@@ -103,8 +111,16 @@ export const MemberUpdateRole = {
   player: 'player',
 } as const;
 
+/**
+ * At least one of role or displayName must be provided.
+ */
 export interface MemberUpdate {
-  role: MemberUpdateRole;
+  role?: MemberUpdateRole;
+  /**
+     * Commissioner/deputy override of a member's display name. Pass null to clear it.
+     * @nullable
+     */
+  displayName?: string | null;
 }
 
 export type UpcomingNflWeekSeasonType = typeof UpcomingNflWeekSeasonType[keyof typeof UpcomingNflWeekSeasonType];

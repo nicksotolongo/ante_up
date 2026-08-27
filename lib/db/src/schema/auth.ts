@@ -20,6 +20,9 @@ export const usersTable = pgTable('users', {
   email: varchar('email').unique(),
   firstName: varchar('first_name'),
   lastName: varchar('last_name'),
+  // User-chosen override shown instead of firstName/lastName. Never touched by the
+  // OIDC login upsert, so it survives across logins (unlike firstName/lastName).
+  displayName: varchar('display_name'),
   profileImageUrl: varchar('profile_image_url'),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()

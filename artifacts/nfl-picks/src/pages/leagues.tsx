@@ -1,10 +1,10 @@
-import { useListLeagues, useGetDashboard, useJoinLeague, useCreateLeague, getListLeaguesQueryKey, getGetDashboardQueryKey } from "@workspace/api-client-react";
+import { useGetDashboard, useJoinLeague, useCreateLeague, useUpdateCurrentUser, getGetDashboardQueryKey } from "@workspace/api-client-react";
 import { Shell } from "@/components/layout";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Trophy, ChevronRight, Plus, Key, Users } from "lucide-react";
@@ -15,25 +15,55 @@ export default function LeagueHub() {
   const { data: dashboard, isLoading } = useGetDashboard();
   const joinLeague = useJoinLeague();
   const createLeague = useCreateLeague();
+  const updateCurrentUser = useUpdateCurrentUser();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { user } = useAuth();
+  const [, navigate] = useLocation();
   const canCreate = !!(user as any)?.canCreateLeagues;
 
   const [inviteCode, setInviteCode] = useState("");
   const [leagueName, setLeagueName] = useState("");
   const [leagueSlug, setLeagueSlug] = useState("");
+  const [joinOpen, setJoinOpen] = useState(false);
+  const [namePromptOpen, setNamePromptOpen] = useState(false);
+  const [displayName, setDisplayName] = useState("");
+  const [joinedLeagueId, setJoinedLeagueId] = useState<number | null>(null);
 
   const handleJoin = () => {
     if (!inviteCode) return;
     joinLeague.mutate({ data: { inviteCode } }, {
-      onSuccess: () => {
+      onSuccess: (league) => {
         toast({ title: "League joined" });
         queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
         setInviteCode("");
+        setJoinOpen(false);
+        setJoinedLeagueId(league.id);
+        if (!user?.displayName) {
+          setDisplayName("");
+          setNamePromptOpen(true);
+        } else {
+          navigate(`/leagues/${league.id}`);
+        }
       },
       onError: (err: any) => {
         toast({ title: "Failed to join league", description: err.error || "Invalid code", variant: "destructive" });
+      }
+    });
+  };
+
+  const handleSaveDisplayName = () => {
+    const name = displayName.trim();
+    if (!name || joinedLeagueId == null) return;
+
+    updateCurrentUser.mutate({ data: { displayName: name } }, {
+      onSuccess: () => {
+        toast({ title: "Welcome to the league", description: `You'll appear as ${name}.` });
+        setNamePromptOpen(false);
+        navigate(`/leagues/${joinedLeagueId}`);
+      },
+      onError: () => {
+        toast({ title: "Could not save your name", description: "Please try again.", variant: "destructive" });
       }
     });
   };
@@ -66,7 +96,7 @@ export default function LeagueHub() {
             )}
           </div>
           <div className="flex gap-2 w-full sm:w-auto">
-            <Dialog>
+            <Dialog open={joinOpen} onOpenChange={setJoinOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline" className="rounded-none border-border w-full sm:w-auto">
                   <Key className="mr-2 h-4 w-4" />
@@ -93,6 +123,44 @@ export default function LeagueHub() {
                     disabled={joinLeague.isPending || !inviteCode}
                   >
                     {joinLeague.isPending ? "Joining..." : "Join League"}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={namePromptOpen} onOpenChange={() => {}}>
+              <DialogContent
+                className="rounded-none border-border"
+                onEscapeKeyDown={(event) => event.preventDefault()}
+                onPointerDownOutside={(event) => event.preventDefault()}
+              >
+                <DialogHeader>
+                  <DialogTitle className="font-serif uppercase">What should we call you?</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <p className="text-sm text-muted-foreground">
+                    Enter the name other players will see in picks, standings, and the live board.
+                  </p>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase" htmlFor="new-player-display-name">Player Name</label>
+                    <Input
+                      id="new-player-display-name"
+                      autoFocus
+                      placeholder="Enter your name..."
+                      className="rounded-none border-border"
+                      value={displayName}
+                      onChange={(event) => setDisplayName(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" && displayName.trim()) handleSaveDisplayName();
+                      }}
+                    />
+                  </div>
+                  <Button
+                    className="w-full rounded-none uppercase font-bold"
+                    onClick={handleSaveDisplayName}
+                    disabled={!displayName.trim() || updateCurrentUser.isPending}
+                  >
+                    {updateCurrentUser.isPending ? "Saving..." : "Enter League"}
                   </Button>
                 </div>
               </DialogContent>

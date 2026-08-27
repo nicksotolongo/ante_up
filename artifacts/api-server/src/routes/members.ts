@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { and, eq } from "drizzle-orm";
 import { db, leagueMembersTable, leaguesTable, usersTable } from "@workspace/db";
 import { UpdateMemberBody } from "@workspace/api-zod";
+import { makeDisplayName } from "../lib/displayName";
 
 const router: IRouter = Router();
 
@@ -22,8 +23,10 @@ router.get("/leagues/:leagueId/members", async (req, res): Promise<void> => {
       userId: leagueMembersTable.userId,
       role: leagueMembersTable.role,
       joinedAt: leagueMembersTable.joinedAt,
+      displayName: usersTable.displayName,
       firstName: usersTable.firstName,
       lastName: usersTable.lastName,
+      email: usersTable.email,
       profileImageUrl: usersTable.profileImageUrl,
     })
     .from(leagueMembersTable)
@@ -36,7 +39,7 @@ router.get("/leagues/:leagueId/members", async (req, res): Promise<void> => {
     userId: m.userId,
     role: m.role,
     joinedAt: m.joinedAt.toISOString(),
-    displayName: [m.firstName, m.lastName].filter(Boolean).join(" ") || m.userId,
+    displayName: makeDisplayName(m),
     firstName: m.firstName,
     lastName: m.lastName,
     profileImageUrl: m.profileImageUrl,
@@ -55,25 +58,36 @@ router.patch("/leagues/:leagueId/members/:userId", async (req, res): Promise<voi
   if (!league) { res.status(404).json({ error: "League not found" }); return; }
   const [requester] = await db.select().from(leagueMembersTable).where(and(eq(leagueMembersTable.leagueId, leagueId), eq(leagueMembersTable.userId, requesterId), eq(leagueMembersTable.status, "active")));
   if (!requester || !["commissioner", "deputy"].includes(requester.role)) { res.status(403).json({ error: "Commissioner or deputy only" }); return; }
-  if (targetUserId === league.commissionerId) { res.status(400).json({ error: "Cannot change the commissioner's role" }); return; }
 
   const parsed = UpdateMemberBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  if (parsed.data.role === "commissioner") { res.status(400).json({ error: "Cannot assign the commissioner role" }); return; }
+  if (parsed.data.role === undefined && parsed.data.displayName === undefined) { res.status(400).json({ error: "Nothing to update" }); return; }
 
   const [member] = await db.select().from(leagueMembersTable).where(and(eq(leagueMembersTable.leagueId, leagueId), eq(leagueMembersTable.userId, targetUserId), eq(leagueMembersTable.status, "active")));
   if (!member) { res.status(404).json({ error: "Member not found" }); return; }
 
-  const [updated] = await db.update(leagueMembersTable).set({ role: parsed.data.role }).where(eq(leagueMembersTable.id, member.id)).returning();
+  if (parsed.data.displayName !== undefined) {
+    const trimmed = parsed.data.displayName?.trim() || null;
+    await db.update(usersTable).set({ displayName: trimmed }).where(eq(usersTable.id, targetUserId));
+  }
+
+  let updatedRole = member.role;
+  if (parsed.data.role !== undefined) {
+    if (targetUserId === league.commissionerId) { res.status(400).json({ error: "Cannot change the commissioner's role" }); return; }
+    if (parsed.data.role === "commissioner") { res.status(400).json({ error: "Cannot assign the commissioner role" }); return; }
+    const [updated] = await db.update(leagueMembersTable).set({ role: parsed.data.role }).where(eq(leagueMembersTable.id, member.id)).returning();
+    updatedRole = updated.role;
+  }
+
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, targetUserId));
 
   res.json({
-    id: updated.id,
-    leagueId: updated.leagueId,
-    userId: updated.userId,
-    role: updated.role,
-    joinedAt: updated.joinedAt.toISOString(),
-    displayName: [user?.firstName, user?.lastName].filter(Boolean).join(" ") || targetUserId,
+    id: member.id,
+    leagueId: member.leagueId,
+    userId: member.userId,
+    role: updatedRole,
+    joinedAt: member.joinedAt.toISOString(),
+    displayName: makeDisplayName({ ...user, userId: targetUserId }),
     firstName: user?.firstName,
     lastName: user?.lastName,
     profileImageUrl: user?.profileImageUrl,

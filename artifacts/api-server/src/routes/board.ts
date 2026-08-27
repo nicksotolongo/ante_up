@@ -68,8 +68,9 @@ router.get("/leagues/:leagueId/events/:eventId/board", async (req, res): Promise
   const allMembers = await db.select({
     id: leagueMembersTable.id,
     userId: leagueMembersTable.userId,
+    displayName: usersTable.displayName,
     firstName: usersTable.firstName,
-      email: usersTable.email,
+    email: usersTable.email,
     lastName: usersTable.lastName,
     profileImageUrl: usersTable.profileImageUrl,
   }).from(leagueMembersTable).innerJoin(usersTable, eq(usersTable.id, leagueMembersTable.userId)).where(and(eq(leagueMembersTable.leagueId, leagueId), eq(leagueMembersTable.status, "active")));

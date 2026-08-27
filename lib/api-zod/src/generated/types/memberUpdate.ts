@@ -7,6 +7,14 @@
  */
 import type { MemberUpdateRole } from './memberUpdateRole';
 
+/**
+ * At least one of role or displayName must be provided.
+ */
 export interface MemberUpdate {
-  role: MemberUpdateRole;
+  role?: MemberUpdateRole;
+  /**
+     * Commissioner/deputy override of a member's display name. Pass null to clear it.
+     * @nullable
+     */
+  displayName?: string | null;
 }

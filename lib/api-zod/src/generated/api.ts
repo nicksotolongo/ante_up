@@ -37,6 +37,30 @@ export const GetCurrentAuthUserResponse = zod.object({
 
 
 /**
+ * @summary Update the currently authenticated user's display name
+ */
+export const UpdateCurrentUserHeader = zod.object({
+  "Authorization": zod.string().optional()
+})
+
+export const UpdateCurrentUserBody = zod.object({
+  "displayName": zod.string().nullish().describe('Pass null to clear the override and fall back to your account name.')
+})
+
+export const UpdateCurrentUserResponse = zod.object({
+  "user": zod.union([zod.object({
+  "id": zod.string(),
+  "email": zod.string().nullish(),
+  "firstName": zod.string().nullable(),
+  "lastName": zod.string().nullable(),
+  "profileImageUrl": zod.string().nullable(),
+  "displayName": zod.string().nullish(),
+  "canCreateLeagues": zod.boolean().optional()
+}),zod.null()])
+})
+
+
+/**
  * @summary Start OIDC login
  */
 export const BeginBrowserLoginQueryParams = zod.object({
@@ -233,8 +257,9 @@ export const UpdateMemberParams = zod.object({
 })
 
 export const UpdateMemberBody = zod.object({
-  "role": zod.enum(['commissioner', 'deputy', 'player'])
-})
+  "role": zod.enum(['commissioner', 'deputy', 'player']).optional(),
+  "displayName": zod.string().nullish().describe('Commissioner\/deputy override of a member\'s display name. Pass null to clear it.')
+}).describe('At least one of role or displayName must be provided.')
 
 export const UpdateMemberResponse = zod.object({
   "id": zod.number(),

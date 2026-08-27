@@ -60,6 +60,28 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthUserEnvelope'
+    patch:
+      tags: [Auth]
+      operationId: updateCurrentUser
+      summary: Update the currently authenticated user's display name
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CurrentUserUpdate'
+      responses:
+        '200':
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthUserEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
   /login:
     get:
@@ -1015,13 +1037,23 @@ components:
         profileImageUrl:
           type: ["string", "null"]
 
+    CurrentUserUpdate:
+      type: object
+      properties:
+        displayName:
+          description: Pass null to clear the override and fall back to your account name.
+          type: ["string", "null"]
+
     MemberUpdate:
       type: object
-      required: [role]
+      description: At least one of role or displayName must be provided.
       properties:
         role:
           type: string
           enum: [commissioner, deputy, player]
+        displayName:
+          description: Commissioner/deputy override of a member's display name. Pass null to clear it.
+          type: ["string", "null"]
 
     # ── NFL Games ─────────────────────────────────────────────────────────────
     UpcomingNflWeek:

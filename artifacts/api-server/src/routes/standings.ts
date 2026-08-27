@@ -20,6 +20,7 @@ router.get("/leagues/:leagueId/standings", async (req, res): Promise<void> => {
   const [allMembers, finalizedEvents] = await Promise.all([
     db.select({
       userId: leagueMembersTable.userId,
+      displayName: usersTable.displayName,
       firstName: usersTable.firstName,
       email: usersTable.email,
       lastName: usersTable.lastName,
@@ -119,6 +120,7 @@ router.get("/leagues/:leagueId/events/:eventId/standings", async (req, res): Pro
   const [allMembers, allSubs] = await Promise.all([
     db.select({
       userId: leagueMembersTable.userId,
+      displayName: usersTable.displayName,
       firstName: usersTable.firstName,
       email: usersTable.email,
       lastName: usersTable.lastName,

@@ -1,4 +1,4 @@
-import { GetCurrentAuthUserResponse } from '@workspace/api-zod';
+import { GetCurrentAuthUserResponse, UpdateCurrentUserBody } from '@workspace/api-zod';
 import { db, usersTable } from '@workspace/db';
 import { eq } from 'drizzle-orm';
 import { Router, type IRouter, type Request, type Response } from 'express';
@@ -122,8 +122,33 @@ router.get('/auth/user', async (req: Request, res: Response) => {
   let user = null;
   if (req.isAuthenticated()) {
     const [row] = await db.select().from(usersTable).where(eq(usersTable.id, req.user.id));
-    user = { ...req.user, canCreateLeagues: isAppAdmin(row?.email) };
+    user = { ...req.user, displayName: row?.displayName ?? null, canCreateLeagues: isAppAdmin(row?.email) };
   }
+  res.json(GetCurrentAuthUserResponse.parse({ user }));
+});
+
+router.patch('/auth/user', async (req: Request, res: Response) => {
+  if (!req.isAuthenticated()) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+  const parsed = UpdateCurrentUserBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const trimmed = parsed.data.displayName?.trim() || null;
+  const [row] = await db
+    .update(usersTable)
+    .set({ displayName: trimmed })
+    .where(eq(usersTable.id, req.user.id))
+    .returning();
+
+  const user = {
+    ...req.user,
+    displayName: row.displayName,
+    canCreateLeagues: isAppAdmin(row.email),
+  };
   res.json(GetCurrentAuthUserResponse.parse({ user }));
 });
 

@@ -18,6 +18,7 @@ export * from './boardCellSelectedTeam';
 export * from './boardRow';
 export * from './currentNflWeek';
 export * from './currentNflWeekSeasonType';
+export * from './currentUserUpdate';
 export * from './dashboard';
 export * from './dashboardEvent';
 export * from './dashboardLeague';

@@ -17,6 +17,7 @@ import {
   UpdateSubmissionBody,
   UpdateSubmissionParams,
 } from "@workspace/api-zod";
+import { makeDisplayName } from "../lib/displayName";
 
 const router: IRouter = Router();
 
@@ -183,7 +184,7 @@ router.get("/leagues/:leagueId/events/:eventId/submissions", async (req, res): P
       id: sub.id,
       pickEventId: sub.pickEventId,
       userId: sub.userId,
-      displayName: [user?.firstName, user?.lastName].filter(Boolean).join(" ") || sub.userId,
+      displayName: makeDisplayName({ ...user, userId: sub.userId }),
       profileImageUrl: user?.profileImageUrl ?? null,
       moneyPickGameId: sub.moneyPickGameId != null && revealedGameIds.has(sub.moneyPickGameId) ? sub.moneyPickGameId : null,
       tiebreakerAnswer: allRevealed ? (sub.tiebreakerAnswer ?? null) : null,

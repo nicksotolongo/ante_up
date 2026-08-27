@@ -25,6 +25,7 @@ import type {
   BadRequestResponse,
   BeginBrowserLoginParams,
   CurrentNflWeek,
+  CurrentUserUpdate,
   Dashboard,
   EventGame,
   EventGameInput,
@@ -239,6 +240,77 @@ export function useGetCurrentAuthUser<TData = Awaited<ReturnType<typeof getCurre
 
 
 
+
+export const getUpdateCurrentUserUrl = () => {
+
+
+
+
+  return `/api/auth/user`
+}
+
+/**
+ * @summary Update the currently authenticated user's display name
+ */
+export const updateCurrentUser = async (currentUserUpdate: CurrentUserUpdate, options?: Parameters<typeof customFetch>[1]): Promise<AuthUserEnvelope> => {
+
+  return customFetch<AuthUserEnvelope>(getUpdateCurrentUserUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(currentUserUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateCurrentUserMutationOptions = <TError = ErrorType<UnauthorizedResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCurrentUser>>, TError,{data: BodyType<CurrentUserUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateCurrentUser>>, TError,{data: BodyType<CurrentUserUpdate>}, TContext> => {
+
+const mutationKey = ['updateCurrentUser'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateCurrentUser>>, {data: BodyType<CurrentUserUpdate>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateCurrentUser(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateCurrentUserMutationResult = NonNullable<Awaited<ReturnType<typeof updateCurrentUser>>>
+    export type UpdateCurrentUserMutationBody = BodyType<CurrentUserUpdate>
+    export type UpdateCurrentUserMutationError = ErrorType<UnauthorizedResponse>
+
+    /**
+ * @summary Update the currently authenticated user's display name
+ */
+export const useUpdateCurrentUser = <TError = ErrorType<UnauthorizedResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCurrentUser>>, TError,{data: BodyType<CurrentUserUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateCurrentUser>>,
+        TError,
+        {data: BodyType<CurrentUserUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateCurrentUserMutationOptions(options));
+    }
 
 export const getBeginBrowserLoginUrl = (params?: BeginBrowserLoginParams,) => {
   const normalizedParams = new URLSearchParams();
