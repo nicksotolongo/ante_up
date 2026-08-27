@@ -48,8 +48,6 @@ router.get("/dashboard", async (req, res): Promise<void> => {
           nflWeek: activeEvent.nflWeek,
           nflSeason: activeEvent.nflSeason,
           status: activeEvent.status,
-          submissionDeadline: activeEvent.submissionDeadline.toISOString(),
-          revealAt: activeEvent.revealAt.toISOString(),
           tiebreakerQuestion: activeEvent.tiebreakerQuestion ?? null,
           tiebreakerResult: activeEvent.tiebreakerResult ?? null,
           notes: activeEvent.notes ?? null,

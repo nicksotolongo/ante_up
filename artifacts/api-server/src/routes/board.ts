@@ -179,8 +179,6 @@ router.get("/leagues/:leagueId/events/:eventId/board", async (req, res): Promise
       nflSeason: event.nflSeason,
       status: event.status,
       nflSeasonType: event.nflSeasonType ?? "regular",
-      submissionDeadline: event.submissionDeadline.toISOString(),
-      revealAt: event.revealAt.toISOString(),
       createdAt: event.createdAt.toISOString(),
       tiebreakerQuestion: event.tiebreakerQuestion ?? null,
       tiebreakerResult: event.tiebreakerResult ?? null,

@@ -1125,7 +1125,7 @@ components:
     # ── Pick Events ───────────────────────────────────────────────────────────
     PickEvent:
       type: object
-      required: [id, leagueId, name, nflWeek, nflSeason, nflSeasonType, status, submissionDeadline, revealAt, createdAt]
+      required: [id, leagueId, name, nflWeek, nflSeason, nflSeasonType, status, createdAt]
       properties:
         id:
           type: number
@@ -1143,12 +1143,6 @@ components:
         status:
           type: string
           enum: [draft, open, locked, revealed, finalized]
-        submissionDeadline:
-          type: string
-          format: date-time
-        revealAt:
-          type: string
-          format: date-time
         tiebreakerQuestion:
           type: ["string", "null"]
         tiebreakerResult:
@@ -1171,7 +1165,7 @@ components:
 
     PickEventInput:
       type: object
-      required: [name, nflWeek, nflSeason, submissionDeadline, revealAt]
+      required: [name, nflWeek, nflSeason]
       properties:
         name:
           type: string
@@ -1183,12 +1177,6 @@ components:
         nflSeasonType:
           type: string
           enum: [preseason, regular]
-        submissionDeadline:
-          type: string
-          format: date-time
-        revealAt:
-          type: string
-          format: date-time
         tiebreakerQuestion:
           type: string
         notes:
@@ -1200,12 +1188,6 @@ components:
         name:
           type: string
           minLength: 1
-        submissionDeadline:
-          type: string
-          format: date-time
-        revealAt:
-          type: string
-          format: date-time
         tiebreakerQuestion:
           type: ["string", "null"]
         tiebreakerResult:

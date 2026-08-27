@@ -9,8 +9,6 @@
 export interface PickEventUpdate {
   /** @minLength 1 */
   name?: string;
-  submissionDeadline?: Date;
-  revealAt?: Date;
   /** @nullable */
   tiebreakerQuestion?: string | null;
   /** @nullable */

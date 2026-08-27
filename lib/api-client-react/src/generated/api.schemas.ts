@@ -229,8 +229,6 @@ export interface PickEvent {
   nflSeason: number;
   nflSeasonType: PickEventNflSeasonType;
   status: PickEventStatus;
-  submissionDeadline: string;
-  revealAt: string;
   /** @nullable */
   tiebreakerQuestion?: string | null;
   /** @nullable */
@@ -260,8 +258,6 @@ export interface PickEventInput {
   nflWeek: number;
   nflSeason: number;
   nflSeasonType?: PickEventInputNflSeasonType;
-  submissionDeadline: string;
-  revealAt: string;
   tiebreakerQuestion?: string;
   notes?: string;
 }
@@ -269,8 +265,6 @@ export interface PickEventInput {
 export interface PickEventUpdate {
   /** @minLength 1 */
   name?: string;
-  submissionDeadline?: string;
-  revealAt?: string;
   /** @nullable */
   tiebreakerQuestion?: string | null;
   /** @nullable */

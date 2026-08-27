@@ -27,8 +27,6 @@ function formatEvent(event: typeof pickEventsTable.$inferSelect, submissionCount
     nflSeason: event.nflSeason,
     nflSeasonType: (event.nflSeasonType ?? "regular") as NflSeasonType,
     status: event.status,
-    submissionDeadline: event.submissionDeadline.toISOString(),
-    revealAt: event.revealAt.toISOString(),
     tiebreakerQuestion: event.tiebreakerQuestion ?? null,
     tiebreakerResult: event.tiebreakerResult ?? null,
     notes: event.notes ?? null,
@@ -92,7 +90,7 @@ router.post("/leagues/:leagueId/events", async (req, res): Promise<void> => {
   const parsed = CreatePickEventBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const { name, nflWeek, nflSeason, submissionDeadline, revealAt, tiebreakerQuestion, notes } = parsed.data;
+  const { name, nflWeek, nflSeason, tiebreakerQuestion, notes } = parsed.data;
   const nflSeasonType: NflSeasonType = ((parsed.data as any).nflSeasonType as NflSeasonType) ?? "regular";
 
   const [event] = await db.insert(pickEventsTable).values({
@@ -102,8 +100,6 @@ router.post("/leagues/:leagueId/events", async (req, res): Promise<void> => {
     nflSeason,
     nflSeasonType,
     status: "draft",
-    submissionDeadline: new Date(submissionDeadline),
-    revealAt: new Date(revealAt),
     tiebreakerQuestion: tiebreakerQuestion ?? null,
     notes: notes ?? null,
     createdBy: userId,
@@ -152,8 +148,6 @@ router.patch("/leagues/:leagueId/events/:eventId", async (req, res): Promise<voi
 
   const updates: Partial<typeof pickEventsTable.$inferInsert> = {};
   if (parsed.data.name != null) updates.name = parsed.data.name;
-  if (parsed.data.submissionDeadline != null) updates.submissionDeadline = new Date(parsed.data.submissionDeadline);
-  if (parsed.data.revealAt != null) updates.revealAt = new Date(parsed.data.revealAt);
   if ("tiebreakerQuestion" in parsed.data) updates.tiebreakerQuestion = parsed.data.tiebreakerQuestion;
   if ("tiebreakerResult" in parsed.data) updates.tiebreakerResult = parsed.data.tiebreakerResult ?? undefined;
   if ("notes" in parsed.data) updates.notes = parsed.data.notes;

@@ -16,8 +16,6 @@ export interface PickEvent {
   nflSeason: number;
   nflSeasonType: PickEventNflSeasonType;
   status: PickEventStatus;
-  submissionDeadline: Date;
-  revealAt: Date;
   /** @nullable */
   tiebreakerQuestion?: string | null;
   /** @nullable */

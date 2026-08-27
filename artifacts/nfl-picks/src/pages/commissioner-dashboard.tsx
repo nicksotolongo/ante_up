@@ -36,8 +36,6 @@ export default function CommissionerDashboard() {
 
   // --- create form state ---
   const [name, setName] = useState("");
-  const [deadline, setDeadline] = useState("");
-  const [revealAt, setRevealAt] = useState("");
   const [tiebreaker, setTiebreaker] = useState("");
   const [selectedGames, setSelectedGames] = useState<Set<string>>(new Set());
 
@@ -63,7 +61,7 @@ export default function CommissionerDashboard() {
     return null;
   }, [upcomingWeeks, selectedGames]);
 
-  const canCreate = name && deadline && revealAt && selectedGames.size > 0 && !createEvent.isPending;
+  const canCreate = name && selectedGames.size > 0 && !createEvent.isPending;
 
   const handleCreateEvent = () => {
     if (!canCreate || !derivedWeekInfo) return;
@@ -78,8 +76,6 @@ export default function CommissionerDashboard() {
           nflWeek: derivedWeekInfo.nflWeek,
           nflSeason: derivedWeekInfo.nflSeason,
           nflSeasonType: derivedWeekInfo.nflSeasonType as any,
-          submissionDeadline: new Date(deadline).toISOString(),
-          revealAt: new Date(revealAt).toISOString(),
           tiebreakerQuestion: tiebreaker || undefined,
         },
       },
@@ -220,26 +216,6 @@ export default function CommissionerDashboard() {
                     className="rounded-none border-border font-serif text-lg"
                   />
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Submission Deadline</label>
-                    <Input
-                      type="datetime-local"
-                      value={deadline}
-                      onChange={e => setDeadline(e.target.value)}
-                      className="rounded-none border-border font-mono text-sm"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Reveal At</label>
-                    <Input
-                      type="datetime-local"
-                      value={revealAt}
-                      onChange={e => setRevealAt(e.target.value)}
-                      className="rounded-none border-border font-mono text-sm"
-                    />
-                  </div>
-                </div>
                 <div className="space-y-2">
                   <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Tiebreaker Question (Optional)</label>
                   <Input
@@ -316,18 +292,21 @@ export default function CommissionerDashboard() {
                                 hour: "numeric", minute: "2-digit",
                               });
                               return (
-                                <button
+                                <div
                                   key={game.id}
-                                  type="button"
-                                  onClick={() => toggleGame(game.id)}
-                                  className={`w-full flex items-center gap-4 p-4 text-left transition-colors ${checked ? "bg-foreground/5" : "hover:bg-muted/40"}`}
+                                  className={`w-full flex items-center gap-4 p-4 transition-colors ${checked ? "bg-foreground/5" : "hover:bg-muted/40"}`}
                                 >
                                   <Checkbox
                                     checked={checked}
                                     onCheckedChange={() => toggleGame(game.id)}
+                                    aria-label={`Select ${game.awayTeam} at ${game.homeTeam}`}
                                     className="rounded-none w-5 h-5 shrink-0"
                                   />
-                                  <div className="flex-1 min-w-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleGame(game.id)}
+                                    className="flex-1 min-w-0 text-left"
+                                  >
                                     <div className="font-mono font-bold text-base">
                                       {game.awayTeam} <span className="text-muted-foreground font-normal">@</span> {game.homeTeam}
                                     </div>
@@ -335,8 +314,8 @@ export default function CommissionerDashboard() {
                                       <span>{timeLabel}</span>
                                       <span className="font-bold">Line: {spreadLabel}</span>
                                     </div>
-                                  </div>
-                                </button>
+                                  </button>
+                                </div>
                               );
                             })}
                           </div>

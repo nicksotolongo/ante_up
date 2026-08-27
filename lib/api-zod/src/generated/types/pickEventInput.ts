@@ -13,8 +13,6 @@ export interface PickEventInput {
   nflWeek: number;
   nflSeason: number;
   nflSeasonType?: PickEventInputNflSeasonType;
-  submissionDeadline: Date;
-  revealAt: Date;
   tiebreakerQuestion?: string;
   notes?: string;
 }

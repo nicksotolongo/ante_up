@@ -57,16 +57,12 @@ async function seed() {
   console.log("Added 8 members");
 
   // 4. Create pick event (Week 1, open)
-  const deadline = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000); // 2 days from now
-  const revealAt = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
   const [event] = await db.insert(pickEventsTable).values({
     leagueId: league.id,
     name: "Week 1 — Sunday Slate",
     nflWeek: 1,
     nflSeason: 2026,
     status: "open",
-    submissionDeadline: deadline,
-    revealAt,
     tiebreakerQuestion: "How many total points will be scored in the SNF game?",
     notes: "Good luck everyone. Pick 6 games, choose your money pick wisely.",
     createdBy: "u-comm-01",
@@ -115,23 +111,20 @@ async function seed() {
   console.log("Created 6 submissions with picks");
 
   // 7. Create a finalized past event to show standings
-  const pastDeadline = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const [pastEvent] = await db.insert(pickEventsTable).values({
     leagueId: league.id,
     name: "Preseason Week 1",
     nflWeek: 0,
     nflSeason: 2026,
     status: "finalized",
-    submissionDeadline: pastDeadline,
-    revealAt: new Date(pastDeadline.getTime() + 24 * 60 * 60 * 1000),
     tiebreakerQuestion: "Total points in opener?",
     tiebreakerResult: 48,
     createdBy: "u-comm-01",
-    publishedAt: new Date(pastDeadline.getTime() - 24 * 60 * 60 * 1000),
+    publishedAt: new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000),
     finalizedAt: new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000),
   }).returning();
 
-  const pastKickoff = new Date(pastDeadline.getTime() - 48 * 60 * 60 * 1000);
+  const pastKickoff = new Date(now.getTime() - 9 * 24 * 60 * 60 * 1000);
   const pastGames = await db.insert(eventGamesTable).values([
     { pickEventId: pastEvent.id, nflGameId: "2026-W0-S1", homeTeam: "KC", awayTeam: "DET", kickoffAt: pastKickoff, lockedSpread: -3, spreadTeam: "home", displayOrder: 1, result: "home", homeScore: 27, awayScore: 17, isFinalized: true },
     { pickEventId: pastEvent.id, nflGameId: "2026-W0-S2", homeTeam: "BUF", awayTeam: "MIA", kickoffAt: pastKickoff, lockedSpread: -7, spreadTeam: "home", displayOrder: 2, result: "away", homeScore: 21, awayScore: 20, isFinalized: true },
@@ -157,7 +150,7 @@ async function seed() {
       userId: s.userId,
       moneyPickGameId: s.money,
       tiebreakerAnswer: s.tiebreaker,
-      lockedAt: pastDeadline,
+      lockedAt: pastKickoff,
     }).returning();
 
     // Insert picks with results
