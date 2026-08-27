@@ -11,6 +11,7 @@ import {
 } from "@workspace/api-zod";
 import { getNflGame, getUpcomingWeeks, type NflSeasonType } from "../lib/espnProvider";
 import { calculateAtsResult } from "../lib/mockNflGames";
+import { gradePicksForGame } from "../lib/gradeGame";
 
 const router: IRouter = Router();
 
@@ -190,33 +191,11 @@ router.patch("/leagues/:leagueId/events/:eventId/games/:eventGameId", async (req
 
   // Grade picks if the game is finalized and has a result
   if (updated.isFinalized && updated.result) {
-    await gradePicks(eventGameId, updated.result as "home" | "away" | "push", eg);
+    await gradePicksForGame(eg.pickEventId, eventGameId, updated.result as "home" | "away" | "push");
   }
 
   res.json(formatEventGame(updated));
 });
-
-async function gradePicks(
-  eventGameId: number,
-  result: "home" | "away" | "push",
-  eg: typeof eventGamesTable.$inferSelect,
-) {
-  const subs = await db.select().from(submissionsTable).where(eq(submissionsTable.pickEventId, eg.pickEventId));
-  for (const sub of subs) {
-    const [pick] = await db
-      .select()
-      .from(picksTable)
-      .where(and(eq(picksTable.submissionId, sub.id), eq(picksTable.eventGameId, eventGameId)));
-    if (!pick) continue;
-    const isMoneyPick = sub.moneyPickGameId === eventGameId;
-    const pickResult: "win" | "loss" | "push" =
-      result === "push" ? "push" : pick.selectedTeam === result ? "win" : "loss";
-    const pointsAwarded =
-      result === "push" ? 0 :
-      pick.selectedTeam === result ? (isMoneyPick ? 2 : 1) : 0;
-    await db.update(picksTable).set({ result: pickResult, pointsAwarded }).where(eq(picksTable.id, pick.id));
-  }
-}
 
 // DELETE /leagues/:leagueId/events/:eventId/games/:eventGameId
 router.delete("/leagues/:leagueId/events/:eventId/games/:eventGameId", async (req, res): Promise<void> => {

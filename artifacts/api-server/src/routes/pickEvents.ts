@@ -3,6 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { db, eventGamesTable, leagueMembersTable, leaguesTable, picksTable, pickEventsTable, submissionsTable } from "@workspace/db";
 import { getLiveScoreById, getNflGames, getNflGame, type NflSeasonType } from "../lib/espnProvider";
 import { calculateAtsResult } from "../lib/mockNflGames";
+import { gradePicksForGame } from "../lib/gradeGame";
 import {
   CreatePickEventBody,
   CreatePickEventParams,
@@ -269,26 +270,9 @@ router.post("/leagues/:leagueId/events/:eventId/finalize", async (req, res): Pro
       continue;
     }
 
-    // Persist result + scores + finalized flag
+    // Persist result + scores + finalized flag, then grade every pick for this game
     await db.update(eventGamesTable).set({ result, homeScore: homeScore ?? undefined, awayScore: awayScore ?? undefined, isFinalized: true }).where(eq(eventGamesTable.id, eg.id));
-
-    // Grade every pick for this game
-    const subs = await db.select().from(submissionsTable).where(eq(submissionsTable.pickEventId, eventId));
-    for (const sub of subs) {
-      const [pick] = await db.select().from(picksTable).where(and(eq(picksTable.submissionId, sub.id), eq(picksTable.eventGameId, eg.id)));
-      if (!pick) continue;
-      const isMoneyPick = sub.moneyPickGameId === eg.id;
-      let pickResult: "win" | "loss" | "push";
-      let pointsAwarded: number;
-      if (result === "push") {
-        pickResult = "push"; pointsAwarded = 0;
-      } else if (pick.selectedTeam === result) {
-        pickResult = "win"; pointsAwarded = isMoneyPick ? 2 : 1;
-      } else {
-        pickResult = "loss"; pointsAwarded = 0;
-      }
-      await db.update(picksTable).set({ result: pickResult, pointsAwarded }).where(eq(picksTable.id, pick.id));
-    }
+    await gradePicksForGame(eventId, eg.id, result);
   }
 
   const [updated] = await db.update(pickEventsTable).set({ status: "finalized", finalizedAt: new Date() }).where(eq(pickEventsTable.id, eventId)).returning();

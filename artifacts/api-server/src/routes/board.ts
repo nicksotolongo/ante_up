@@ -4,6 +4,7 @@ import { db, eventGamesTable, leagueMembersTable, pickEventsTable, picksTable, s
 import { GetLiveBoardParams } from "@workspace/api-zod";
 import { makeDisplayName } from "../lib/displayName";
 import { getLiveScoreById, getNflGames, type NflGame, type NflSeasonType } from "../lib/espnProvider";
+import { maybeAutoFinalizeGame } from "../lib/gradeGame";
 
 const router: IRouter = Router();
 
@@ -21,7 +22,9 @@ router.get("/leagues/:leagueId/events/:eventId/board", async (req, res): Promise
   const [event] = await db.select().from(pickEventsTable).where(and(eq(pickEventsTable.id, eventId), eq(pickEventsTable.leagueId, leagueId)));
   if (!event) { res.status(404).json({ error: "Event not found" }); return; }
 
-  const eventGames = await db.select().from(eventGamesTable).where(eq(eventGamesTable.pickEventId, eventId));
+  let eventGames = await db.select().from(eventGamesTable).where(eq(eventGamesTable.pickEventId, eventId));
+
+  const now = new Date();
 
   // Live scores from ESPN (cached ~5 min) — used for games not yet finalized
   let espnGames: NflGame[] = [];
@@ -41,9 +44,20 @@ router.get("/leagues/:leagueId/events/:eventId/board", async (req, res): Promise
     if (eg.isFinalized || findEspn(eg) || now < eg.kickoffAt) return;
     liveScoreById.set(eg.id, await getLiveScoreById(eg.nflGameId));
   }));
-  const submissions = await db.select().from(submissionsTable).where(eq(submissionsTable.pickEventId, eventId));
 
-  const now = new Date();
+  // Auto-grade: the instant the provider reports a game final, finalize it and
+  // grade every pick — this is what makes the board flip a game to win/loss on
+  // its own, without waiting for the commissioner's event-level Finalize.
+  eventGames = await Promise.all(eventGames.map(async (eg) => {
+    if (eg.isFinalized) return eg;
+    const espn = findEspn(eg);
+    const live = espn ?? liveScoreById.get(eg.id);
+    if (!live) return eg;
+    const graded = await maybeAutoFinalizeGame(eg, live);
+    return graded ?? eg;
+  }));
+
+  const submissions = await db.select().from(submissionsTable).where(eq(submissionsTable.pickEventId, eventId));
   // Per-game reveal: each game's picks become visible once that game kicks off.
   // The board itself is always viewable once the event is published.
   const isRevealed = event.status !== "draft";
