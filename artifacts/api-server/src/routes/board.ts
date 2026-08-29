@@ -22,7 +22,11 @@ router.get("/leagues/:leagueId/events/:eventId/board", async (req, res): Promise
   const [event] = await db.select().from(pickEventsTable).where(and(eq(pickEventsTable.id, eventId), eq(pickEventsTable.leagueId, leagueId)));
   if (!event) { res.status(404).json({ error: "Event not found" }); return; }
 
-  let eventGames = await db.select().from(eventGamesTable).where(eq(eventGamesTable.pickEventId, eventId));
+  let eventGames = await db
+    .select()
+    .from(eventGamesTable)
+    .where(eq(eventGamesTable.pickEventId, eventId))
+    .orderBy(eventGamesTable.displayOrder, eventGamesTable.id);
 
   const now = new Date();
 
@@ -185,10 +189,12 @@ router.get("/leagues/:leagueId/events/:eventId/board", async (req, res): Promise
     },
     games: eventGames.map((eg) => {
       const espn = eg.isFinalized ? undefined : findEspn(eg);
+      const direct = eg.isFinalized ? undefined : liveScoreByEventGameId.get(eg.id);
+      const providerGame = espn ?? direct ?? undefined;
       // Prefer finalized DB scores; otherwise show live ESPN scores
-      const homeScore = eg.isFinalized ? (eg.homeScore ?? null) : (espn?.homeScore ?? eg.homeScore ?? null);
-      const awayScore = eg.isFinalized ? (eg.awayScore ?? null) : (espn?.awayScore ?? eg.awayScore ?? null);
-      const gameStatus = eg.isFinalized ? "final" : (espn?.gameStatus ?? (homeScore != null ? "in_progress" : "scheduled"));
+      const homeScore = eg.isFinalized ? (eg.homeScore ?? null) : (providerGame?.homeScore ?? eg.homeScore ?? null);
+      const awayScore = eg.isFinalized ? (eg.awayScore ?? null) : (providerGame?.awayScore ?? eg.awayScore ?? null);
+      const gameStatus = eg.isFinalized ? "final" : (providerGame?.gameStatus ?? (homeScore != null ? "in_progress" : "scheduled"));
       return {
         id: eg.id,
         pickEventId: eg.pickEventId,
@@ -215,7 +221,7 @@ router.get("/leagues/:leagueId/events/:eventId/board", async (req, res): Promise
           favoredTeam: eg.spreadTeam ?? null,
           homeScore,
           awayScore,
-          updatedAt: (espn?.updatedAt ?? eg.createdAt).toISOString(),
+          updatedAt: ("updatedAt" in (providerGame ?? {}) ? providerGame?.updatedAt : undefined)?.toISOString() ?? eg.createdAt.toISOString(),
         },
       };
     }),

@@ -280,37 +280,27 @@ router.patch("/leagues/:leagueId/events/:eventId/submissions/:submissionId", asy
   const validationError = validatePicksAgainstGames(picks, moneyPickGameId, tiebreakerAnswer, eventGames, event.tiebreakerQuestion, { picks: existingPicks, moneyPickGameId: sub.moneyPickGameId ?? null }, now);
   if (validationError) { res.status(400).json({ error: validationError }); return; }
 
-  // Reconcile picks in place so unchanged, already-graded rows keep their
-  // result and pointsAwarded values when new games are added to a live event.
+  // Reconcile in place so graded rows keep their result and points. Existing
+  // graded picks are immutable even if provider timing data is inconsistent.
   await db.transaction(async (tx) => {
     await tx.update(submissionsTable).set({ moneyPickGameId, tiebreakerAnswer }).where(eq(submissionsTable.id, submissionId));
-
     const existingByGame = new Map(existingPicks.map((pick) => [pick.eventGameId, pick]));
-    for (const pick of picks) {
-      const existingPick = existingByGame.get(pick.eventGameId);
+    for (const incoming of picks) {
+      const existingPick = existingByGame.get(incoming.eventGameId);
       if (!existingPick) {
-        await tx
-          .insert(picksTable)
-          .values({
-            submissionId,
-            eventGameId: pick.eventGameId,
-            selectedTeam: pick.selectedTeam,
-          })
-          .onConflictDoUpdate({
-            target: [picksTable.submissionId, picksTable.eventGameId],
-            set: { selectedTeam: pick.selectedTeam },
-          });
+        await tx.insert(picksTable).values({
+          submissionId,
+          eventGameId: incoming.eventGameId,
+          selectedTeam: incoming.selectedTeam,
+        }).onConflictDoNothing({
+          target: [picksTable.submissionId, picksTable.eventGameId],
+        });
         continue;
       }
-
-      if (existingPick.selectedTeam !== pick.selectedTeam) {
+      if (existingPick.result == null && existingPick.selectedTeam !== incoming.selectedTeam) {
         await tx
           .update(picksTable)
-          .set({
-            selectedTeam: pick.selectedTeam,
-            result: null,
-            pointsAwarded: null,
-          })
+          .set({ selectedTeam: incoming.selectedTeam })
           .where(eq(picksTable.id, existingPick.id));
       }
     }

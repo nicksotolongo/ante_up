@@ -11,7 +11,7 @@ import {
 } from "@workspace/api-zod";
 import { getNflGame, getUpcomingWeeks, type NflSeasonType } from "../lib/espnProvider";
 import { calculateAtsResult } from "../lib/mockNflGames";
-import { gradePicksForGame } from "../lib/gradeGame";
+import { finalizeAndGradeGame } from "../lib/gradeGame";
 
 const router: IRouter = Router();
 
@@ -76,7 +76,11 @@ router.get("/leagues/:leagueId/events/:eventId/games", async (req, res): Promise
     .where(and(eq(leagueMembersTable.leagueId, leagueId), eq(leagueMembersTable.userId, userId), eq(leagueMembersTable.status, "active")));
   if (!member) { res.status(403).json({ error: "Not a member" }); return; }
 
-  const games = await db.select().from(eventGamesTable).where(eq(eventGamesTable.pickEventId, eventId));
+  const games = await db
+    .select()
+    .from(eventGamesTable)
+    .where(eq(eventGamesTable.pickEventId, eventId))
+    .orderBy(eventGamesTable.displayOrder, eventGamesTable.id);
   res.json(games.map(formatEventGame));
 });
 
@@ -144,7 +148,10 @@ router.post("/leagues/:leagueId/events/:eventId/games", async (req, res): Promis
       eq(eventGamesTable.pickEventId, eventId),
       eq(eventGamesTable.nflGameId, espnGame.id),
     ));
-  res.status(200).json(formatEventGame(existing));
+  if (!existing) {
+    throw new Error("Event game conflict occurred without an existing row");
+  }
+  res.status(201).json(formatEventGame(existing));
 });
 
 // PATCH /leagues/:leagueId/events/:eventId/games/:eventGameId
@@ -175,6 +182,13 @@ router.patch("/leagues/:leagueId/events/:eventId/games/:eventGameId", async (req
     .where(and(eq(eventGamesTable.id, eventGameId), eq(eventGamesTable.pickEventId, eventId)));
   if (!eg) { res.status(404).json({ error: "Event game not found" }); return; }
 
+  const changesScore = ["result", "homeScore", "awayScore", "isFinalized"]
+    .some((field) => field in parsed.data);
+  if (changesScore && (eg.isFinalized || event.status === "finalized")) {
+    res.status(400).json({ error: "Finalized game scores cannot be changed" });
+    return;
+  }
+
   // Spread corrections are only allowed while the event is still in draft
   if (
     ("lockedSpread" in parsed.data && parsed.data.lockedSpread !== undefined) ||
@@ -199,15 +213,36 @@ router.patch("/leagues/:leagueId/events/:eventId/games/:eventGameId", async (req
     updates.result = calculateAtsResult(updates.homeScore, updates.awayScore, eg.lockedSpread, eg.spreadTeam as "home" | "away");
   }
 
+  const finalResult = updates.result ?? eg.result;
+  if (updates.isFinalized === true && !finalResult) {
+    res.status(400).json({ error: "A game result is required before finalizing" });
+    return;
+  }
+  if (updates.isFinalized === true && finalResult) {
+    const finalized = await finalizeAndGradeGame(eg, finalResult as "home" | "away" | "push", {
+      homeScore: updates.homeScore ?? eg.homeScore,
+      awayScore: updates.awayScore ?? eg.awayScore,
+    });
+    if (!finalized) {
+      res.status(400).json({ error: "Game was already finalized" });
+      return;
+    }
+    res.json(formatEventGame(finalized));
+    return;
+  }
+
   const [updated] = await db
     .update(eventGamesTable)
     .set(updates)
-    .where(eq(eventGamesTable.id, eventGameId))
+    .where(
+      changesScore
+        ? and(eq(eventGamesTable.id, eventGameId), eq(eventGamesTable.isFinalized, false))
+        : eq(eventGamesTable.id, eventGameId),
+    )
     .returning();
-
-  // Grade picks if the game is finalized and has a result
-  if (updated.isFinalized && updated.result) {
-    await gradePicksForGame(eg.pickEventId, eventGameId, updated.result as "home" | "away" | "push");
+  if (!updated) {
+    res.status(400).json({ error: "Game was finalized before this update could be saved" });
+    return;
   }
 
   res.json(formatEventGame(updated));

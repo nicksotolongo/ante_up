@@ -1,5 +1,5 @@
 import { useParams, Link, useLocation } from "wouter";
-import { useGetPickEvent, useListEventGames, useGetMySubmission, useSubmitPicks, useUpdateSubmission, PickInput, PickInputSelectedTeam } from "@workspace/api-client-react";
+import { useGetPickEvent, useListEventGames, useGetMySubmission, useSubmitPicks, useUpdateSubmission, PickInput, PickInputSelectedTeam, getGetLiveBoardQueryKey, getGetMySubmissionQueryKey, getListEventGamesQueryKey } from "@workspace/api-client-react";
 import { Shell } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,7 +19,7 @@ export default function PlayerPicksForm() {
   const queryClient = useQueryClient();
 
   const { data: event, isLoading: loadingEvent } = useGetPickEvent(leagueId, eventId, { query: { enabled: !!leagueId && !!eventId } });
-  const { data: games, isLoading: loadingGames } = useListEventGames(leagueId, eventId, { query: { enabled: !!leagueId && !!eventId } });
+  const { data: games, isLoading: loadingGames } = useListEventGames(leagueId, eventId, { query: { enabled: !!leagueId && !!eventId, refetchInterval: 10000 } });
   const { data: submissionEnvelope, isLoading: loadingSubmission } = useGetMySubmission(leagueId, eventId, { query: { enabled: !!leagueId && !!eventId } });
 
   const [picks, setPicks] = useState<Record<number, PickInputSelectedTeam>>({});
@@ -110,7 +110,9 @@ export default function PlayerPicksForm() {
         {
           onSuccess: () => {
             toast({ title: "Picks updated!" });
-            queryClient.invalidateQueries({ queryKey: ["/api/leagues", leagueId, "events", eventId, "my-submission"] });
+            queryClient.invalidateQueries({ queryKey: getGetMySubmissionQueryKey(leagueId, eventId) });
+            queryClient.invalidateQueries({ queryKey: getListEventGamesQueryKey(leagueId, eventId) });
+            queryClient.invalidateQueries({ queryKey: getGetLiveBoardQueryKey(leagueId, eventId) });
             setLocation(`/leagues/${leagueId}`);
           },
           onError: (err: any) => {
@@ -124,7 +126,9 @@ export default function PlayerPicksForm() {
         {
           onSuccess: () => {
             toast({ title: "Picks submitted!" });
-            queryClient.invalidateQueries({ queryKey: ["/api/leagues", leagueId, "events", eventId, "my-submission"] });
+            queryClient.invalidateQueries({ queryKey: getGetMySubmissionQueryKey(leagueId, eventId) });
+            queryClient.invalidateQueries({ queryKey: getListEventGamesQueryKey(leagueId, eventId) });
+            queryClient.invalidateQueries({ queryKey: getGetLiveBoardQueryKey(leagueId, eventId) });
             setLocation(`/leagues/${leagueId}`);
           },
           onError: (err: any) => {

@@ -37,7 +37,9 @@ export default function EventManagement() {
   const queryClient = useQueryClient();
 
   const { data: event, isLoading: loadingEvent } = useGetPickEvent(leagueId, eventId, { query: { enabled: !!leagueId && !!eventId } });
-  const { data: eventGames, isLoading: loadingGames } = useListEventGames(leagueId, eventId, { query: { enabled: !!leagueId && !!eventId } });
+  const { data: eventGames, isLoading: loadingGames } = useListEventGames(leagueId, eventId, {
+    query: { enabled: !!leagueId && !!eventId, refetchInterval: 10000 },
+  });
   const { data: board } = useGetLiveBoard(leagueId, eventId, { query: { enabled: !!leagueId && !!eventId } });
   
   const { data: eventWeekGames } = useListNflGames(
@@ -64,6 +66,14 @@ export default function EventManagement() {
   const [editingSpread, setEditingSpread] = useState<number | null>(null); // eventGameId being edited
   const [spreadDraft, setSpreadDraft] = useState<{ lockedSpread: string; spreadTeam: string }>({ lockedSpread: "", spreadTeam: "" });
   const [addingGameIds, setAddingGameIds] = useState<Set<string>>(new Set());
+
+  const refreshEventViews = () => Promise.all([
+    queryClient.invalidateQueries({ queryKey: getListEventGamesQueryKey(leagueId, eventId) }),
+    queryClient.invalidateQueries({ queryKey: getGetPickEventQueryKey(leagueId, eventId) }),
+    queryClient.invalidateQueries({ queryKey: getListPickEventsQueryKey(leagueId) }),
+    queryClient.invalidateQueries({ queryKey: getGetLiveBoardQueryKey(leagueId, eventId) }),
+    queryClient.invalidateQueries({ queryKey: getGetMySubmissionQueryKey(leagueId, eventId) }),
+  ]);
 
   useEffect(() => {
     if (event?.tiebreakerResult != null) {
@@ -94,13 +104,7 @@ export default function EventManagement() {
       }, {
         onSuccess: async () => {
           toast({ title: "Game added" });
-          await Promise.all([
-            queryClient.invalidateQueries({ queryKey: getListEventGamesQueryKey(leagueId, eventId) }),
-            queryClient.invalidateQueries({ queryKey: getGetPickEventQueryKey(leagueId, eventId) }),
-            queryClient.invalidateQueries({ queryKey: getListPickEventsQueryKey(leagueId) }),
-            queryClient.invalidateQueries({ queryKey: getGetLiveBoardQueryKey(leagueId, eventId) }),
-            queryClient.invalidateQueries({ queryKey: getGetMySubmissionQueryKey(leagueId, eventId) }),
-          ]);
+          await refreshEventViews();
         },
         onError: (err: any) => {
           toast({ title: "Could not add game", description: err?.message, variant: "destructive" });
@@ -120,11 +124,7 @@ export default function EventManagement() {
     if (!pendingRemove) return;
     removeGame.mutate({ leagueId, eventId, eventGameId: pendingRemove.eventGameId }, {
       onSuccess: (data) => {
-        queryClient.invalidateQueries({ queryKey: getListEventGamesQueryKey(leagueId, eventId) });
-        queryClient.invalidateQueries({ queryKey: getGetPickEventQueryKey(leagueId, eventId) });
-        queryClient.invalidateQueries({ queryKey: getListPickEventsQueryKey(leagueId) });
-        queryClient.invalidateQueries({ queryKey: getGetLiveBoardQueryKey(leagueId, eventId) });
-        queryClient.invalidateQueries({ queryKey: getGetMySubmissionQueryKey(leagueId, eventId) });
+        void refreshEventViews();
         const count = data?.deletedPicksCount ?? 0;
         toast({
           title: "Game removed",
@@ -145,7 +145,7 @@ export default function EventManagement() {
     updateGame.mutate({ leagueId, eventId, eventGameId, data: { result } }, {
       onSuccess: () => {
         toast({ title: "Result updated" });
-        queryClient.invalidateQueries({ queryKey: ["/api/leagues", leagueId, "events", eventId, "games"] });
+        void refreshEventViews();
       }
     });
   };
@@ -167,7 +167,7 @@ export default function EventManagement() {
       {
         onSuccess: () => {
           toast({ title: "Spread updated" });
-          queryClient.invalidateQueries({ queryKey: ["/api/leagues", leagueId, "events", eventId, "games"] });
+          void refreshEventViews();
           setEditingSpread(null);
         },
         onError: (err: any) => {
@@ -181,7 +181,7 @@ export default function EventManagement() {
     action.mutate({ leagueId, eventId }, {
       onSuccess: () => {
         toast({ title: `${actionName} successful` });
-        queryClient.invalidateQueries({ queryKey: ["/api/leagues", leagueId, "events", eventId] });
+        void refreshEventViews();
       },
       onError: (err: any) => {
         toast({ title: `Error`, description: err?.message, variant: "destructive" });
@@ -194,7 +194,7 @@ export default function EventManagement() {
     updateEvent.mutate({ leagueId, eventId, data: { tiebreakerResult: parseInt(tiebreakerResult) } }, {
       onSuccess: () => {
         toast({ title: "Tiebreaker saved" });
-        queryClient.invalidateQueries({ queryKey: ["/api/leagues", leagueId, "events", eventId] });
+        void refreshEventViews();
       }
     });
   };

@@ -3,7 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { db, eventGamesTable, leagueMembersTable, leaguesTable, picksTable, pickEventsTable, submissionsTable } from "@workspace/db";
 import { getLiveScoreById, getNflGames, getNflGame, type NflSeasonType } from "../lib/espnProvider";
 import { calculateAtsResult } from "../lib/mockNflGames";
-import { gradePicksForGame } from "../lib/gradeGame";
+import { finalizeAndGradeGame } from "../lib/gradeGame";
 import {
   CreatePickEventBody,
   CreatePickEventParams,
@@ -247,7 +247,7 @@ router.post("/leagues/:leagueId/events/:eventId/finalize", async (req, res): Pro
       homeScore = espnGame.homeScore;
       awayScore = espnGame.awayScore;
       result = calculateAtsResult(espnGame.homeScore, espnGame.awayScore, eg.lockedSpread, eg.spreadTeam as "home" | "away");
-    } else if (!espnGame && eg.lockedSpread != null && eg.spreadTeam) {
+    } else if (espnGame?.gameStatus !== "final" && eg.lockedSpread != null && eg.spreadTeam) {
       // Weekly scoreboard didn't include this game (stored week may not match ESPN's
       // numbering) — look the score up directly by ESPN game ID
       const live = await getLiveScoreById(eg.nflGameId);
@@ -264,9 +264,10 @@ router.post("/leagues/:leagueId/events/:eventId/finalize", async (req, res): Pro
       continue;
     }
 
-    // Persist result + scores + finalized flag, then grade every pick for this game
-    await db.update(eventGamesTable).set({ result, homeScore: homeScore ?? undefined, awayScore: awayScore ?? undefined, isFinalized: true }).where(eq(eventGamesTable.id, eg.id));
-    await gradePicksForGame(eventId, eg.id, result);
+    await finalizeAndGradeGame(eg, result, {
+      homeScore: homeScore ?? null,
+      awayScore: awayScore ?? null,
+    });
   }
 
   const [updated] = await db.update(pickEventsTable).set({ status: "finalized", finalizedAt: new Date() }).where(eq(pickEventsTable.id, eventId)).returning();
