@@ -18,7 +18,7 @@ export default function Login() {
       <div className="w-full max-w-sm space-y-8 text-center">
         <div className="space-y-2">
           <h1 className="text-4xl font-serif font-black tracking-tighter uppercase border-b-4 border-foreground pb-2 inline-block">
-            The Board
+            Ante Up
           </h1>
           <p className="text-muted-foreground text-sm uppercase tracking-widest mt-4">
             Private NFL Picks League
@@ -34,7 +34,7 @@ export default function Login() {
             className="w-full rounded-none font-bold uppercase tracking-wider text-sm h-12" 
             onClick={login}
           >
-            Enter The League
+            Fade Yourself
           </Button>
         </div>
       </div>
