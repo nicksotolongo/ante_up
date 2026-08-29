@@ -197,7 +197,7 @@ test("finalization racing a stale score update leaves one coherent final result"
   assert.equal(stored.awayScore, 17);
 });
 
-test("adding a new game to a submission preserves the graded pick row and points", async () => {
+test("concurrent updates add one new pick and preserve the graded pick row and points", async () => {
   const event = await createEvent();
   const gradedGame = await createGame(event.id, {
     nflGameId: `graded-${runId}`,
@@ -230,9 +230,8 @@ test("adding a new game to a submission preserves the graded pick row and points
     })
     .returning();
 
-  const response = await request(
-    `/api/leagues/${leagueId}/events/${event.id}/submissions/${submission.id}`,
-    {
+  const path = `/api/leagues/${leagueId}/events/${event.id}/submissions/${submission.id}`;
+  const options = {
       method: "PATCH",
       body: JSON.stringify({
         moneyPickGameId: gradedGame.id,
@@ -242,10 +241,13 @@ test("adding a new game to a submission preserves the graded pick row and points
           { eventGameId: newGame.id, selectedTeam: "away" },
         ],
       }),
-    },
-  );
+    };
+  const responses = await Promise.all([
+    request(path, options),
+    request(path, options),
+  ]);
 
-  assert.equal(response.status, 200);
+  assert.deepEqual(responses.map(({ status }) => status), [200, 200]);
   const storedPicks = await db
     .select()
     .from(picksTable)

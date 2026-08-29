@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   db,
   eventGamesTable,
@@ -283,8 +283,20 @@ router.patch("/leagues/:leagueId/events/:eventId/submissions/:submissionId", asy
   // Reconcile in place so graded rows keep their result and points. Existing
   // graded picks are immutable even if provider timing data is inconsistent.
   await db.transaction(async (tx) => {
+    // Serialize updates to one submission. The second concurrent request
+    // re-reads picks after the first commits instead of inserting duplicates.
+    await tx.execute(sql`
+      SELECT pg_advisory_xact_lock(
+        hashtextextended(${"submission-picks:" + submissionId}, 0)
+      )
+    `);
+    const currentPicks = await tx
+      .select()
+      .from(picksTable)
+      .where(eq(picksTable.submissionId, submissionId));
+
     await tx.update(submissionsTable).set({ moneyPickGameId, tiebreakerAnswer }).where(eq(submissionsTable.id, submissionId));
-    const existingByGame = new Map(existingPicks.map((pick) => [pick.eventGameId, pick]));
+    const existingByGame = new Map(currentPicks.map((pick) => [pick.eventGameId, pick]));
     for (const incoming of picks) {
       const existingPick = existingByGame.get(incoming.eventGameId);
       if (!existingPick) {
@@ -292,8 +304,6 @@ router.patch("/leagues/:leagueId/events/:eventId/submissions/:submissionId", asy
           submissionId,
           eventGameId: incoming.eventGameId,
           selectedTeam: incoming.selectedTeam,
-        }).onConflictDoNothing({
-          target: [picksTable.submissionId, picksTable.eventGameId],
         });
         continue;
       }

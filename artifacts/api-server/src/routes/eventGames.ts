@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db, eventGamesTable, leagueMembersTable, pickEventsTable, picksTable, submissionsTable } from "@workspace/db";
 import {
   AddEventGameBody,
@@ -126,40 +126,43 @@ router.post("/leagues/:leagueId/events/:eventId/games", async (req, res): Promis
   }
   if (!espnGame) { res.status(404).json({ error: "NFL game not found in the current schedule" }); return; }
 
-  const [inserted] = await db
-    .insert(eventGamesTable)
-    .values({
-      pickEventId: eventId,
-      nflGameId: espnGame.id,
-      homeTeam: espnGame.homeTeam,
-      awayTeam: espnGame.awayTeam,
-      kickoffAt: espnGame.kickoffAt,
-      lockedSpread: parsed.data.lockedSpread ?? espnGame.spread ?? null,
-      spreadTeam: parsed.data.spreadTeam ?? espnGame.favoredTeam ?? null,
-      displayOrder: parsed.data.displayOrder,
-    })
-    .onConflictDoNothing({
-      target: [eventGamesTable.pickEventId, eventGamesTable.nflGameId],
-    })
-    .returning();
+  const eventGame = await db.transaction(async (tx) => {
+    // Serialize this event/game key so concurrent requests cannot both pass
+    // the existence check. This protects new writes without requiring old
+    // duplicate production rows to be rewritten.
+    await tx.execute(sql`
+      SELECT pg_advisory_xact_lock(
+        hashtextextended(${"event-game:" + eventId + ":" + espnGame.id}, 0)
+      )
+    `);
 
-  if (inserted) {
-    res.status(201).json(formatEventGame(inserted));
-    return;
-  }
+    const [existing] = await tx
+      .select()
+      .from(eventGamesTable)
+      .where(and(
+        eq(eventGamesTable.pickEventId, eventId),
+        eq(eventGamesTable.nflGameId, espnGame.id),
+      ))
+      .orderBy(eventGamesTable.id);
+    if (existing) return existing;
 
-  // Treat retries and double-clicks as an idempotent success.
-  const [existing] = await db
-    .select()
-    .from(eventGamesTable)
-    .where(and(
-      eq(eventGamesTable.pickEventId, eventId),
-      eq(eventGamesTable.nflGameId, espnGame.id),
-    ));
-  if (!existing) {
-    throw new Error("Event game conflict occurred without an existing row");
-  }
-  res.status(201).json(formatEventGame(existing));
+    const [inserted] = await tx
+      .insert(eventGamesTable)
+      .values({
+        pickEventId: eventId,
+        nflGameId: espnGame.id,
+        homeTeam: espnGame.homeTeam,
+        awayTeam: espnGame.awayTeam,
+        kickoffAt: espnGame.kickoffAt,
+        lockedSpread: parsed.data.lockedSpread ?? espnGame.spread ?? null,
+        spreadTeam: parsed.data.spreadTeam ?? espnGame.favoredTeam ?? null,
+        displayOrder: parsed.data.displayOrder,
+      })
+      .returning();
+    return inserted;
+  });
+
+  res.status(201).json(formatEventGame(eventGame));
 });
 
 // PATCH /leagues/:leagueId/events/:eventId/games/:eventGameId
