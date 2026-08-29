@@ -13,6 +13,12 @@ import { getNflGame, getUpcomingWeeks, type NflSeasonType } from "../lib/espnPro
 import { calculateAtsResult } from "../lib/mockNflGames";
 import { finalizeAndGradeGame } from "../lib/gradeGame";
 
+type EventGamesDependencies = {
+  getNflGame: typeof getNflGame;
+  getUpcomingWeeks: typeof getUpcomingWeeks;
+};
+
+const defaultEventGamesDependencies: EventGamesDependencies = { getNflGame, getUpcomingWeeks };
 const router: IRouter = Router();
 
 function formatEventGame(eg: typeof eventGamesTable.$inferSelect) {
@@ -109,10 +115,12 @@ router.post("/leagues/:leagueId/events/:eventId/games", async (req, res): Promis
   // Look up game from ESPN (real schedule) by ID — try the event's stored week first,
   // then fall back to upcoming weeks (stored week may not match ESPN's numbering)
   const seasonType = (event.nflSeasonType ?? "regular") as NflSeasonType;
-  let espnGame = await getNflGame(parsed.data.nflGameId, event.nflWeek, event.nflSeason, seasonType);
+  const dependencies: EventGamesDependencies =
+    req.app.locals.eventGamesDependencies ?? defaultEventGamesDependencies;
+  let espnGame = await dependencies.getNflGame(parsed.data.nflGameId, event.nflWeek, event.nflSeason, seasonType);
   if (!espnGame) {
-    for (const w of getUpcomingWeeks()) {
-      espnGame = await getNflGame(parsed.data.nflGameId, w.week, w.season, w.seasonType as NflSeasonType);
+    for (const w of dependencies.getUpcomingWeeks()) {
+      espnGame = await dependencies.getNflGame(parsed.data.nflGameId, w.week, w.season, w.seasonType as NflSeasonType);
       if (espnGame) break;
     }
   }
