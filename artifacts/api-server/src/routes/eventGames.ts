@@ -114,7 +114,7 @@ router.post("/leagues/:leagueId/events/:eventId/games", async (req, res): Promis
   }
   if (!espnGame) { res.status(404).json({ error: "NFL game not found in the current schedule" }); return; }
 
-  const [eg] = await db
+  const [inserted] = await db
     .insert(eventGamesTable)
     .values({
       pickEventId: eventId,
@@ -126,9 +126,25 @@ router.post("/leagues/:leagueId/events/:eventId/games", async (req, res): Promis
       spreadTeam: parsed.data.spreadTeam ?? espnGame.favoredTeam ?? null,
       displayOrder: parsed.data.displayOrder,
     })
+    .onConflictDoNothing({
+      target: [eventGamesTable.pickEventId, eventGamesTable.nflGameId],
+    })
     .returning();
 
-  res.status(201).json(formatEventGame(eg));
+  if (inserted) {
+    res.status(201).json(formatEventGame(inserted));
+    return;
+  }
+
+  // Treat retries and double-clicks as an idempotent success.
+  const [existing] = await db
+    .select()
+    .from(eventGamesTable)
+    .where(and(
+      eq(eventGamesTable.pickEventId, eventId),
+      eq(eventGamesTable.nflGameId, espnGame.id),
+    ));
+  res.status(200).json(formatEventGame(existing));
 });
 
 // PATCH /leagues/:leagueId/events/:eventId/games/:eventGameId
@@ -215,7 +231,10 @@ router.delete("/leagues/:leagueId/events/:eventId/games/:eventGameId", async (re
     .from(pickEventsTable)
     .where(and(eq(pickEventsTable.id, eventId), eq(pickEventsTable.leagueId, leagueId)));
   if (!event) { res.status(404).json({ error: "Event not found" }); return; }
-  if (event.status !== "draft") { res.status(400).json({ error: "Cannot remove games from a published event" }); return; }
+  if (event.status !== "draft" && event.status !== "open") {
+    res.status(400).json({ error: "Games can only be removed while the event is in draft or open" });
+    return;
+  }
 
   // Verify the event game actually belongs to this event before touching any picks
   const [eg] = await db
@@ -223,6 +242,10 @@ router.delete("/leagues/:leagueId/events/:eventId/games/:eventGameId", async (re
     .from(eventGamesTable)
     .where(and(eq(eventGamesTable.id, eventGameId), eq(eventGamesTable.pickEventId, eventId)));
   if (!eg) { res.status(404).json({ error: "Event game not found" }); return; }
+  if (new Date() >= eg.kickoffAt) {
+    res.status(400).json({ error: "Cannot remove a game after it has kicked off" });
+    return;
+  }
 
   // Count picks first so we can return the number deleted to the caller
   const existingPicks = await db
@@ -231,8 +254,12 @@ router.delete("/leagues/:leagueId/events/:eventId/games/:eventGameId", async (re
     .where(eq(picksTable.eventGameId, eventGameId));
   const deletedPicksCount = existingPicks.length;
 
-  // Cascade-delete picks then the game atomically so a partial failure leaves no orphans
+  // Clear money-pick references, then cascade-delete picks and the game atomically.
   await db.transaction(async (tx) => {
+    await tx
+      .update(submissionsTable)
+      .set({ moneyPickGameId: null })
+      .where(eq(submissionsTable.moneyPickGameId, eventGameId));
     await tx.delete(picksTable).where(eq(picksTable.eventGameId, eventGameId));
     await tx.delete(eventGamesTable).where(eq(eventGamesTable.id, eventGameId));
   });

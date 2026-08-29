@@ -39,10 +39,10 @@ router.get("/leagues/:leagueId/events/:eventId/board", async (req, res): Promise
 
   // Fallback: direct score lookup by ESPN game ID for games the weekly scoreboard
   // didn't include (e.g. the stored week doesn't match ESPN's week numbering)
-  const liveScoreById = new Map<number, Awaited<ReturnType<typeof getLiveScoreById>>>();
+  const liveScoreByEventGameId = new Map<number, Awaited<ReturnType<typeof getLiveScoreById>>>();
   await Promise.all(eventGames.map(async (eg) => {
     if (eg.isFinalized || findEspn(eg) || now < eg.kickoffAt) return;
-    liveScoreById.set(eg.id, await getLiveScoreById(eg.nflGameId));
+    liveScoreByEventGameId.set(eg.id, await getLiveScoreById(eg.nflGameId));
   }));
 
   // Auto-grade: the instant the provider reports a game final, finalize it and
@@ -51,7 +51,7 @@ router.get("/leagues/:leagueId/events/:eventId/board", async (req, res): Promise
   eventGames = await Promise.all(eventGames.map(async (eg) => {
     if (eg.isFinalized) return eg;
     const espn = findEspn(eg);
-    const live = espn ?? liveScoreById.get(eg.id);
+    const live = espn ?? liveScoreByEventGameId.get(eg.id);
     if (!live) return eg;
     const graded = await maybeAutoFinalizeGame(eg, live);
     return graded ?? eg;

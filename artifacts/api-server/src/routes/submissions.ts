@@ -280,11 +280,40 @@ router.patch("/leagues/:leagueId/events/:eventId/submissions/:submissionId", asy
   const validationError = validatePicksAgainstGames(picks, moneyPickGameId, tiebreakerAnswer, eventGames, event.tiebreakerQuestion, { picks: existingPicks, moneyPickGameId: sub.moneyPickGameId ?? null }, now);
   if (validationError) { res.status(400).json({ error: validationError }); return; }
 
-  // Atomic update: delete + update + re-insert in one transaction to prevent pick loss on failure
+  // Reconcile picks in place so unchanged, already-graded rows keep their
+  // result and pointsAwarded values when new games are added to a live event.
   await db.transaction(async (tx) => {
-    await tx.delete(picksTable).where(eq(picksTable.submissionId, submissionId));
     await tx.update(submissionsTable).set({ moneyPickGameId, tiebreakerAnswer }).where(eq(submissionsTable.id, submissionId));
-    await tx.insert(picksTable).values(picks.map((p) => ({ submissionId, eventGameId: p.eventGameId, selectedTeam: p.selectedTeam })));
+
+    const existingByGame = new Map(existingPicks.map((pick) => [pick.eventGameId, pick]));
+    for (const pick of picks) {
+      const existingPick = existingByGame.get(pick.eventGameId);
+      if (!existingPick) {
+        await tx
+          .insert(picksTable)
+          .values({
+            submissionId,
+            eventGameId: pick.eventGameId,
+            selectedTeam: pick.selectedTeam,
+          })
+          .onConflictDoUpdate({
+            target: [picksTable.submissionId, picksTable.eventGameId],
+            set: { selectedTeam: pick.selectedTeam },
+          });
+        continue;
+      }
+
+      if (existingPick.selectedTeam !== pick.selectedTeam) {
+        await tx
+          .update(picksTable)
+          .set({
+            selectedTeam: pick.selectedTeam,
+            result: null,
+            pointsAwarded: null,
+          })
+          .where(eq(picksTable.id, existingPick.id));
+      }
+    }
   });
 
   const [updatedSub] = await db.select().from(submissionsTable).where(eq(submissionsTable.id, submissionId));

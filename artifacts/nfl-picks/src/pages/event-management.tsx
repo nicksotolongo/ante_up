@@ -1,5 +1,22 @@
 import { useParams } from "wouter";
-import { useGetPickEvent, useListEventGames, useUpdatePickEvent, useUpdateEventGame, useLockPickEvent, useFinalizePickEvent, useListNflGames, useAddEventGame, useRemoveEventGame, useGetLiveBoard, EventGameUpdateResult } from "@workspace/api-client-react";
+import {
+  useGetPickEvent,
+  useListEventGames,
+  useUpdatePickEvent,
+  useUpdateEventGame,
+  useLockPickEvent,
+  useFinalizePickEvent,
+  useListNflGames,
+  useAddEventGame,
+  useRemoveEventGame,
+  useGetLiveBoard,
+  getGetLiveBoardQueryKey,
+  getGetMySubmissionQueryKey,
+  getGetPickEventQueryKey,
+  getListEventGamesQueryKey,
+  getListPickEventsQueryKey,
+  EventGameUpdateResult,
+} from "@workspace/api-client-react";
 import { Shell } from "@/components/layout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -46,6 +63,7 @@ export default function EventManagement() {
   const [pendingRemove, setPendingRemove] = useState<{ nflGameId: string; eventGameId: number; label: string } | null>(null);
   const [editingSpread, setEditingSpread] = useState<number | null>(null); // eventGameId being edited
   const [spreadDraft, setSpreadDraft] = useState<{ lockedSpread: string; spreadTeam: string }>({ lockedSpread: "", spreadTeam: "" });
+  const [addingGameIds, setAddingGameIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (event?.tiebreakerResult != null) {
@@ -63,6 +81,7 @@ export default function EventManagement() {
         setPendingRemove({ nflGameId, eventGameId: existing.id, label: label || nflGameId });
       }
     } else {
+      setAddingGameIds((current) => new Set(current).add(nflGameId));
       addGame.mutate({
         leagueId,
         eventId,
@@ -73,7 +92,26 @@ export default function EventManagement() {
           spreadTeam: favoredTeam as any
         }
       }, {
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/leagues", leagueId, "events", eventId, "games"] })
+        onSuccess: async () => {
+          toast({ title: "Game added" });
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: getListEventGamesQueryKey(leagueId, eventId) }),
+            queryClient.invalidateQueries({ queryKey: getGetPickEventQueryKey(leagueId, eventId) }),
+            queryClient.invalidateQueries({ queryKey: getListPickEventsQueryKey(leagueId) }),
+            queryClient.invalidateQueries({ queryKey: getGetLiveBoardQueryKey(leagueId, eventId) }),
+            queryClient.invalidateQueries({ queryKey: getGetMySubmissionQueryKey(leagueId, eventId) }),
+          ]);
+        },
+        onError: (err: any) => {
+          toast({ title: "Could not add game", description: err?.message, variant: "destructive" });
+        },
+        onSettled: () => {
+          setAddingGameIds((current) => {
+            const next = new Set(current);
+            next.delete(nflGameId);
+            return next;
+          });
+        },
       });
     }
   };
@@ -82,12 +120,16 @@ export default function EventManagement() {
     if (!pendingRemove) return;
     removeGame.mutate({ leagueId, eventId, eventGameId: pendingRemove.eventGameId }, {
       onSuccess: (data) => {
-        queryClient.invalidateQueries({ queryKey: ["/api/leagues", leagueId, "events", eventId, "games"] });
+        queryClient.invalidateQueries({ queryKey: getListEventGamesQueryKey(leagueId, eventId) });
+        queryClient.invalidateQueries({ queryKey: getGetPickEventQueryKey(leagueId, eventId) });
+        queryClient.invalidateQueries({ queryKey: getListPickEventsQueryKey(leagueId) });
+        queryClient.invalidateQueries({ queryKey: getGetLiveBoardQueryKey(leagueId, eventId) });
+        queryClient.invalidateQueries({ queryKey: getGetMySubmissionQueryKey(leagueId, eventId) });
         const count = data?.deletedPicksCount ?? 0;
         toast({
           title: "Game removed",
           description: count > 0
-            ? `${count} player pick${count === 1 ? "" : "s"} were also deleted.`
+            ? `${count} player pick${count === 1 ? " was" : "s were"} also deleted.`
             : undefined,
         });
         setPendingRemove(null);
@@ -199,7 +241,10 @@ export default function EventManagement() {
                         Spread: {eg.spreadTeam || '—'} {eg.lockedSpread != null ? eg.lockedSpread : 'PK'}
                       </div>
                     </div>
-                    {event.status === "draft" && (
+                    {(event.status === "draft" || (
+                      event.status === "open" &&
+                      Date.now() < new Date(eg.nflGame?.kickoffAt ?? 0).getTime()
+                    )) && (
                       <div className="flex gap-2">
                         {editingSpread !== eg.id && (
                           <Button variant="outline" size="sm" className="uppercase font-bold text-xs rounded-none" onClick={() => handleEditSpread(eg)}>
@@ -258,18 +303,28 @@ export default function EventManagement() {
               )}
               {nflGames?.map(game => {
                 const isIncluded = !!eventGames?.find(eg => eg.nflGameId === game.id);
+                const isAdding = addingGameIds.has(game.id);
                 return (
-                  <div key={game.id} className="flex items-center gap-4 p-4 border border-border bg-card">
+                  <div
+                    key={game.id}
+                    className={`flex items-center gap-4 p-4 border border-border ${isIncluded ? "bg-muted/50 opacity-70" : "bg-card"}`}
+                  >
                     <Checkbox 
                       checked={isIncluded} 
-                      disabled={isIncluded && event.status !== "draft"}
+                      disabled={isIncluded || isAdding}
                       onCheckedChange={() => handleToggleGame(game.id, isIncluded, game.spread, game.favoredTeam, `${game.awayTeam} @ ${game.homeTeam}`)}
                       className="rounded-none w-5 h-5"
                     />
-                    <div>
+                    <div className="flex-1">
                       <div className="font-mono font-bold text-lg">{game.awayTeam} @ {game.homeTeam}</div>
                       <div className="text-xs uppercase text-muted-foreground mt-1">Live Spread: {game.favoredTeam || 'PK'} {game.spread != null ? game.spread : ''}</div>
                     </div>
+                    {isIncluded && (
+                      <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Already added</span>
+                    )}
+                    {isAdding && (
+                      <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Adding…</span>
+                    )}
                   </div>
                 );
               })}

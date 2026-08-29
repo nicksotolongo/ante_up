@@ -8,17 +8,18 @@ export type AtsResult = "home" | "away" | "push";
 export async function gradePicksForGame(pickEventId: number, eventGameId: number, result: AtsResult) {
   const subs = await db.select().from(submissionsTable).where(eq(submissionsTable.pickEventId, pickEventId));
   for (const sub of subs) {
-    const [pick] = await db
+    const picks = await db
       .select()
       .from(picksTable)
       .where(and(eq(picksTable.submissionId, sub.id), eq(picksTable.eventGameId, eventGameId)));
-    if (!pick) continue;
-    const isMoneyPick = sub.moneyPickGameId === eventGameId;
-    const pickResult: "win" | "loss" | "push" =
-      result === "push" ? "push" : pick.selectedTeam === result ? "win" : "loss";
-    const pointsAwarded =
-      result === "push" ? 0 : pick.selectedTeam === result ? (isMoneyPick ? 2 : 1) : 0;
-    await db.update(picksTable).set({ result: pickResult, pointsAwarded }).where(eq(picksTable.id, pick.id));
+    for (const pick of picks) {
+      const isMoneyPick = sub.moneyPickGameId === eventGameId;
+      const pickResult: "win" | "loss" | "push" =
+        result === "push" ? "push" : pick.selectedTeam === result ? "win" : "loss";
+      const pointsAwarded =
+        result === "push" ? 0 : pick.selectedTeam === result ? (isMoneyPick ? 2 : 1) : 0;
+      await db.update(picksTable).set({ result: pickResult, pointsAwarded }).where(eq(picksTable.id, pick.id));
+    }
   }
 }
 

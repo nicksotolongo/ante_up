@@ -1,4 +1,4 @@
-import { boolean, jsonb, pgTable, real, serial, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { boolean, integer, jsonb, pgTable, real, serial, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { leaguesTable } from "./leagues";
@@ -46,7 +46,9 @@ export const eventGamesTable = pgTable("event_games", {
   awayScore: real("away_score"),
   isFinalized: boolean("is_finalized").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  uniqueIndex("event_games_event_nfl_game_unique").on(table.pickEventId, table.nflGameId),
+]);
 
 export const insertEventGameSchema = createInsertSchema(eventGamesTable).omit({ id: true, createdAt: true });
 export type InsertEventGame = z.infer<typeof insertEventGameSchema>;
@@ -56,7 +58,7 @@ export const submissionsTable = pgTable("submissions", {
   id: serial("id").primaryKey(),
   pickEventId: serial("pick_event_id").notNull().references(() => pickEventsTable.id, { onDelete: "cascade" }),
   userId: varchar("user_id").notNull().references(() => usersTable.id),
-  moneyPickGameId: serial("money_pick_game_id").references(() => eventGamesTable.id),
+  moneyPickGameId: integer("money_pick_game_id").references(() => eventGamesTable.id),
   tiebreakerAnswer: real("tiebreaker_answer"),
   submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
   lockedAt: timestamp("locked_at", { withTimezone: true }),
@@ -75,7 +77,9 @@ export const picksTable = pgTable("picks", {
   result: text("result"), // 'win', 'loss', 'push', null = pending
   pointsAwarded: real("points_awarded"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  uniqueIndex("picks_submission_event_game_unique").on(table.submissionId, table.eventGameId),
+]);
 
 export const insertPickSchema = createInsertSchema(picksTable).omit({ id: true, createdAt: true });
 export type InsertPick = z.infer<typeof insertPickSchema>;
