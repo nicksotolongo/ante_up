@@ -75,16 +75,29 @@ export function useAuth(): AuthState {
   }, []);
 
   const login = useCallback(() => {
-    if (!supabase) return;
+    if (!supabase) {
+      window.alert('Supabase auth is not configured for this deployment.');
+      return;
+    }
+
     const email = window.prompt('Email address');
     if (!email) return;
 
-    void supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: window.location.href,
-      },
-    });
+    void supabase.auth
+      .signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: window.location.origin,
+        },
+      })
+      .then(({ error }) => {
+        if (error) {
+          window.alert(`Unable to send sign-in link: ${error.message}`);
+          return;
+        }
+
+        window.alert('Check your email for the sign-in link.');
+      });
   }, []);
 
   const logout = useCallback(() => {
