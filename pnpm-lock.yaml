@@ -652,6 +652,9 @@ importers:
       '@workspace/api-client-react':
         specifier: workspace:*
         version: link:../api-client-react
+      '@supabase/supabase-js':
+        specifier: ^2.57.4
+        version: 2.115.0
     devDependencies:
       '@types/react':
         specifier: 'catalog:'
