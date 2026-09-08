@@ -188,9 +188,9 @@ importers:
       express:
         specifier: ^5.2.1
         version: 5.2.1
-      openid-client:
-        specifier: ^6.8.4
-        version: 6.8.4
+      '@supabase/supabase-js':
+        specifier: ^2.57.4
+        version: 2.115.0
       pino:
         specifier: ^9.14.0
         version: 9.14.0
