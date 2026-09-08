@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type Session } from '@supabase/supabase-js';
 import type { AuthUser } from '@workspace/api-client-react';
 
 export type { AuthUser };
@@ -19,13 +19,7 @@ const supabase =
     ? createClient(supabaseUrl, supabasePublishableKey)
     : null;
 
-async function fetchCurrentUser(): Promise<AuthUser | null> {
-  if (!supabase) return null;
-
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
+async function fetchUserForSession(session: Session | null): Promise<AuthUser | null> {
   const accessToken = session?.access_token;
   if (!accessToken) return null;
 
@@ -36,6 +30,16 @@ async function fetchCurrentUser(): Promise<AuthUser | null> {
 
   const data = (await res.json()) as { user: AuthUser | null };
   return data.user ?? null;
+}
+
+async function fetchCurrentUser(): Promise<AuthUser | null> {
+  if (!supabase) return null;
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  return fetchUserForSession(session);
 }
 
 export function useAuth(): AuthState {
@@ -60,12 +64,20 @@ export function useAuth(): AuthState {
       });
 
     const { data: listener } =
-      supabase?.auth.onAuthStateChange(async () => {
-        const currentUser = await fetchCurrentUser();
-        if (!cancelled) {
-          setUser(currentUser);
-          setIsLoading(false);
-        }
+      supabase?.auth.onAuthStateChange((_event, session) => {
+        void fetchUserForSession(session)
+          .then((currentUser) => {
+            if (!cancelled) {
+              setUser(currentUser);
+              setIsLoading(false);
+            }
+          })
+          .catch(() => {
+            if (!cancelled) {
+              setUser(null);
+              setIsLoading(false);
+            }
+          });
       }) ?? { data: { subscription: null } };
 
     return () => {
