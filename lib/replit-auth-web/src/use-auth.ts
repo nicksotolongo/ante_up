@@ -16,7 +16,13 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 const supabase =
   supabaseUrl && supabasePublishableKey
-    ? createClient(supabaseUrl, supabasePublishableKey)
+    ? createClient(supabaseUrl, supabasePublishableKey, {
+        auth: {
+          detectSessionInUrl: true,
+          persistSession: true,
+          autoRefreshToken: true,
+        },
+      })
     : null;
 
 async function fetchUserForSession(session: Session | null): Promise<AuthUser | null> {
@@ -25,21 +31,15 @@ async function fetchUserForSession(session: Session | null): Promise<AuthUser | 
 
   const res = await fetch('/api/auth/user', {
     headers: { Authorization: `Bearer ${accessToken}` },
+    cache: 'no-store',
   });
-  if (!res.ok) return null;
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`Auth API returned ${res.status}${detail ? `: ${detail}` : ''}`);
+  }
 
   const data = (await res.json()) as { user: AuthUser | null };
   return data.user ?? null;
-}
-
-async function fetchCurrentUser(): Promise<AuthUser | null> {
-  if (!supabase) return null;
-
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  return fetchUserForSession(session);
 }
 
 export function useAuth(): AuthState {
@@ -48,41 +48,54 @@ export function useAuth(): AuthState {
 
   useEffect(() => {
     let cancelled = false;
+    let requestVersion = 0;
 
-    fetchCurrentUser()
-      .then((currentUser) => {
-        if (!cancelled) {
-          setUser(currentUser);
-          setIsLoading(false);
-        }
-      })
-      .catch(() => {
+    if (!supabase) {
+      setIsLoading(false);
+      return;
+    }
+
+    const applySession = (session: Session | null) => {
+      const version = ++requestVersion;
+
+      if (!session) {
         if (!cancelled) {
           setUser(null);
           setIsLoading(false);
         }
-      });
+        return;
+      }
 
-    const { data: listener } =
-      supabase?.auth.onAuthStateChange((_event, session) => {
+      // Supabase recommends keeping onAuthStateChange callbacks synchronous.
+      // Defer our API request until after the auth callback has returned.
+      window.setTimeout(() => {
         void fetchUserForSession(session)
           .then((currentUser) => {
-            if (!cancelled) {
+            if (!cancelled && version === requestVersion) {
               setUser(currentUser);
               setIsLoading(false);
             }
           })
-          .catch(() => {
-            if (!cancelled) {
+          .catch((error) => {
+            console.error('Unable to finish Ante Up sign-in', error);
+            if (!cancelled && version === requestVersion) {
               setUser(null);
               setIsLoading(false);
             }
           });
-      }) ?? { data: { subscription: null } };
+      }, 0);
+    };
+
+    // INITIAL_SESSION is emitted after Supabase has finished loading a stored
+    // session or processing a magic-link redirect. Using that event avoids
+    // racing getSession() against redirect initialization.
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      applySession(session);
+    });
 
     return () => {
       cancelled = true;
-      listener.subscription?.unsubscribe();
+      listener.subscription.unsubscribe();
     };
   }, []);
 
