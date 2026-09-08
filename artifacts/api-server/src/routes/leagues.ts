@@ -7,7 +7,6 @@ import {
   usersTable,
 } from "@workspace/db";
 import { isAppAdmin } from "../lib/adminConfig";
-import { CreateLeagueBody, JoinLeagueBody, UpdateLeagueBody } from "@workspace/api-zod";
 import { randomBytes } from "crypto";
 
 const router: IRouter = Router();
@@ -73,12 +72,13 @@ router.post("/leagues", async (req, res): Promise<void> => {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
-  const parsed = CreateLeagueBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
+  const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+  const rawSlug =
+    typeof req.body?.slug === "string" ? req.body.slug.trim() : undefined;
+  if (!name) {
+    res.status(400).json({ error: "name is required" });
     return;
   }
-  const { name, slug: rawSlug } = parsed.data;
   const slug = rawSlug || generateSlug(name);
   const userId = req.user.id;
 
@@ -117,12 +117,12 @@ router.post("/leagues/join", async (req, res): Promise<void> => {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
-  const parsed = JoinLeagueBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
+  const inviteCode =
+    typeof req.body?.inviteCode === "string" ? req.body.inviteCode.trim() : "";
+  if (!inviteCode) {
+    res.status(400).json({ error: "inviteCode is required" });
     return;
   }
-  const { inviteCode } = parsed.data;
   const userId = req.user.id;
 
   const [league] = await db.select().from(leaguesTable).where(eq(leaguesTable.inviteCode, inviteCode));
@@ -198,10 +198,27 @@ router.patch("/leagues/:leagueId", async (req, res): Promise<void> => {
   const [membership] = await db.select().from(leagueMembersTable).where(and(eq(leagueMembersTable.leagueId, leagueId), eq(leagueMembersTable.userId, userId), eq(leagueMembersTable.status, "active")));
   if (!membership || !["commissioner", "deputy"].includes(membership.role)) { res.status(403).json({ error: "Commissioner or deputy only" }); return; }
 
-  const parsed = UpdateLeagueBody.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const update: { name?: string; slug?: string } = {};
+  if (req.body?.name !== undefined) {
+    if (typeof req.body.name !== "string" || !req.body.name.trim()) {
+      res.status(400).json({ error: "name must be a non-empty string" });
+      return;
+    }
+    update.name = req.body.name.trim();
+  }
+  if (req.body?.slug !== undefined) {
+    if (typeof req.body.slug !== "string" || !req.body.slug.trim()) {
+      res.status(400).json({ error: "slug must be a non-empty string" });
+      return;
+    }
+    update.slug = req.body.slug.trim();
+  }
+  if (Object.keys(update).length === 0) {
+    res.status(400).json({ error: "No valid fields to update" });
+    return;
+  }
 
-  const [updated] = await db.update(leaguesTable).set(parsed.data).where(eq(leaguesTable.id, leagueId)).returning();
+  const [updated] = await db.update(leaguesTable).set(update).where(eq(leaguesTable.id, leagueId)).returning();
   const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(leagueMembersTable).where(and(eq(leagueMembersTable.leagueId, leagueId), eq(leagueMembersTable.status, "active")));
 
   res.json({ id: updated.id, name: updated.name, slug: updated.slug, commissionerId: updated.commissionerId, inviteCode: updated.inviteCode, memberCount: Number(count), userRole: membership.role, createdAt: updated.createdAt.toISOString() });
