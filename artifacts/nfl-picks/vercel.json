@@ -35,7 +35,7 @@
         },
         {
           "key": "X-Ante-Up-Auth-Flow",
-          "value": "supabase-session-callback-v2"
+          "value": "supabase-initial-session-v3"
         }
       ]
     }
