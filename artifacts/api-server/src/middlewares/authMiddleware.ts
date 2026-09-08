@@ -1,4 +1,3 @@
-import type { AuthUser } from '@workspace/api-zod';
 import { type NextFunction, type Request, type Response } from 'express';
 import * as oidc from 'openid-client';
 
@@ -9,6 +8,7 @@ import {
   getSessionId,
   updateSession,
   type SessionData,
+  type AuthUser,
 } from '../lib/auth';
 
 declare global {
