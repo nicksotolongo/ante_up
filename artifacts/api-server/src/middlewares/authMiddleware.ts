@@ -1,15 +1,9 @@
+import { createClient } from '@supabase/supabase-js';
 import { type NextFunction, type Request, type Response } from 'express';
-import * as oidc from 'openid-client';
 
-import {
-  clearSession,
-  getOidcConfig,
-  getSession,
-  getSessionId,
-  updateSession,
-  type SessionData,
-  type AuthUser,
-} from '../lib/auth';
+import { db, usersTable } from '@workspace/db';
+import { eq } from 'drizzle-orm';
+import { getBearerToken, type AuthUser } from '../lib/auth';
 
 declare global {
   namespace Express {
@@ -17,7 +11,6 @@ declare global {
 
     interface Request {
       isAuthenticated(): this is AuthedRequest;
-
       user?: User | undefined;
     }
 
@@ -27,59 +20,77 @@ declare global {
   }
 }
 
-async function refreshIfExpired(
-  sid: string,
-  session: SessionData,
-): Promise<SessionData | null> {
-  const now = Math.floor(Date.now() / 1000);
-  if (!session.expires_at || now <= session.expires_at) return session;
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabasePublishableKey = process.env.SUPABASE_PUBLISHABLE_KEY;
 
-  if (!session.refresh_token) return null;
-
-  try {
-    const config = await getOidcConfig();
-    const tokens = await oidc.refreshTokenGrant(config, session.refresh_token);
-    session.access_token = tokens.access_token;
-    session.refresh_token = tokens.refresh_token ?? session.refresh_token;
-    session.expires_at = tokens.expiresIn()
-      ? now + tokens.expiresIn()!
-      : session.expires_at;
-    await updateSession(sid, session);
-    return session;
-  } catch {
-    return null;
-  }
+function getSupabaseClient() {
+  if (!supabaseUrl || !supabasePublishableKey) return null;
+  return createClient(supabaseUrl, supabasePublishableKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 }
 
 export async function authMiddleware(
   req: Request,
-  res: Response,
+  _res: Response,
   next: NextFunction,
 ) {
   req.isAuthenticated = function (this: Request) {
     return this.user != null;
   } as Request['isAuthenticated'];
 
-  const sid = getSessionId(req);
-  if (!sid) {
+  const token = getBearerToken(req.headers.authorization);
+  if (!token) {
     next();
     return;
   }
 
-  const session = await getSession(sid);
-  if (!session?.user?.id) {
-    await clearSession(res, sid);
+  const supabase = getSupabaseClient();
+  if (!supabase) {
     next();
     return;
   }
 
-  const refreshed = await refreshIfExpired(sid, session);
-  if (!refreshed) {
-    await clearSession(res, sid);
+  const { data, error } = await supabase.auth.getUser(token);
+  if (error || !data.user) {
     next();
     return;
   }
 
-  req.user = refreshed.user;
+  const metadata = data.user.user_metadata ?? {};
+  const authUser: AuthUser = {
+    id: data.user.id,
+    email: data.user.email ?? null,
+    firstName:
+      typeof metadata.first_name === 'string' ? metadata.first_name : null,
+    lastName:
+      typeof metadata.last_name === 'string' ? metadata.last_name : null,
+    profileImageUrl:
+      typeof metadata.avatar_url === 'string'
+        ? metadata.avatar_url
+        : typeof metadata.picture === 'string'
+          ? metadata.picture
+          : null,
+  };
+
+  const [dbUser] = await db
+    .insert(usersTable)
+    .values(authUser)
+    .onConflictDoUpdate({
+      target: usersTable.id,
+      set: {
+        email: authUser.email,
+        firstName: authUser.firstName,
+        lastName: authUser.lastName,
+        profileImageUrl: authUser.profileImageUrl,
+        updatedAt: new Date(),
+      },
+    })
+    .returning();
+
+  req.user = {
+    ...authUser,
+    displayName: dbUser.displayName ?? null,
+  };
   next();
 }
