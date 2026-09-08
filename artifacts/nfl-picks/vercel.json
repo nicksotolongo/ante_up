@@ -32,6 +32,10 @@
         {
           "key": "Cross-Origin-Opener-Policy",
           "value": "same-origin-allow-popups"
+        },
+        {
+          "key": "X-Ante-Up-Auth-Flow",
+          "value": "supabase-session-callback-v2"
         }
       ]
     }
