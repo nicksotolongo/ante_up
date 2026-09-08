@@ -1,4 +1,3 @@
-import { GetCurrentAuthUserResponse, UpdateCurrentUserBody } from '@workspace/api-zod';
 import { db, usersTable } from '@workspace/db';
 import { eq } from 'drizzle-orm';
 import { Router, type IRouter, type Request, type Response } from 'express';
@@ -124,7 +123,7 @@ router.get('/auth/user', async (req: Request, res: Response) => {
     const [row] = await db.select().from(usersTable).where(eq(usersTable.id, req.user.id));
     user = { ...req.user, displayName: row?.displayName ?? null, canCreateLeagues: isAppAdmin(row?.email) };
   }
-  res.json(GetCurrentAuthUserResponse.parse({ user }));
+  res.json({ user });
 });
 
 router.patch('/auth/user', async (req: Request, res: Response) => {
@@ -132,12 +131,12 @@ router.patch('/auth/user', async (req: Request, res: Response) => {
     res.status(401).json({ error: 'Unauthorized' });
     return;
   }
-  const parsed = UpdateCurrentUserBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
+  const rawDisplayName = req.body?.displayName;
+  if (rawDisplayName !== undefined && rawDisplayName !== null && typeof rawDisplayName !== 'string') {
+    res.status(400).json({ error: 'displayName must be a string or null' });
     return;
   }
-  const trimmed = parsed.data.displayName?.trim() || null;
+  const trimmed = typeof rawDisplayName === 'string' ? rawDisplayName.trim() || null : null;
   const [row] = await db
     .update(usersTable)
     .set({ displayName: trimmed })
@@ -149,7 +148,7 @@ router.patch('/auth/user', async (req: Request, res: Response) => {
     displayName: row.displayName,
     canCreateLeagues: isAppAdmin(row.email),
   };
-  res.json(GetCurrentAuthUserResponse.parse({ user }));
+  res.json({ user });
 });
 
 router.get('/login', async (req: Request, res: Response) => {
