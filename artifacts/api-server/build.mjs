@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build as esbuild } from "esbuild";
 import esbuildPluginPino from "esbuild-plugin-pino";
-import { rm } from "node:fs/promises";
+import { rm, mkdir, copyFile, writeFile } from "node:fs/promises";
 
 // Plugins (e.g. 'esbuild-plugin-pino') may use `require` to resolve dependencies
 globalThis.require = createRequire(import.meta.url);
@@ -118,6 +118,40 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
     `,
     },
   });
+
+  const outputDir = path.resolve(artifactDir, ".vercel/output");
+  const functionDir = path.resolve(outputDir, "functions/api.func");
+  await rm(outputDir, { recursive: true, force: true });
+  await mkdir(functionDir, { recursive: true });
+
+  await copyFile(path.resolve(distDir, "app.mjs"), path.resolve(functionDir, "app.mjs"));
+  for (const file of ["pino-worker.mjs","pino-file.mjs","pino-pretty.mjs","thread-stream-worker.mjs"]) {
+    await copyFile(path.resolve(distDir, file), path.resolve(functionDir, file));
+  }
+
+  await writeFile(
+    path.resolve(functionDir, "index.mjs"),
+    `import app from "./app.mjs";\nexport default app;\n`,
+  );
+
+  await writeFile(
+    path.resolve(functionDir, ".vc-config.json"),
+    JSON.stringify({
+      runtime: "nodejs22.x",
+      handler: "index.mjs",
+      launcherType: "Nodejs",
+      shouldAddHelpers: true,
+      shouldAddSourcemapSupport: true,
+    }, null, 2),
+  );
+
+  await writeFile(
+    path.resolve(outputDir, "config.json"),
+    JSON.stringify({
+      version: 3,
+      routes: [{ src: "/(.*)", dest: "/api" }],
+    }, null, 2),
+  );
 }
 
 buildAll().catch((err) => {
