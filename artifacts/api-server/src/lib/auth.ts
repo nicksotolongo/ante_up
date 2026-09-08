@@ -1,9 +1,18 @@
 import crypto from 'crypto';
-import type { AuthUser } from '@workspace/api-zod';
 import { db, sessionsTable } from '@workspace/db';
 import { eq } from 'drizzle-orm';
 import { type Request, type Response } from 'express';
 import * as client from 'openid-client';
+
+export interface AuthUser {
+  id: string;
+  email: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  profileImageUrl: string | null;
+  displayName?: string | null;
+  canCreateLeagues?: boolean;
+}
 
 export const ISSUER_URL = process.env.ISSUER_URL ?? 'https://replit.com/oidc';
 export const SESSION_COOKIE = 'sid';
