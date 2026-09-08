@@ -1,17 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": null,
-  "installCommand": "pnpm install --no-frozen-lockfile",
-  "buildCommand": null,
-  "functions": {
-    "api/index.ts": {
-      "maxDuration": 30
-    }
-  },
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/api/index"
-    }
-  ]
+  "framework": "express",
+  "installCommand": "pnpm install --no-frozen-lockfile"
 }
