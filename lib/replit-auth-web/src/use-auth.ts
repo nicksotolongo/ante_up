@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { createClient } from '@supabase/supabase-js';
 import type { AuthUser } from '@workspace/api-client-react';
 
 export type { AuthUser };
@@ -11,8 +12,30 @@ interface AuthState {
   logout: () => void;
 }
 
-function getBasePath() {
-  return import.meta.env.BASE_URL.replace(/\/+$/, '') || '/';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const supabase =
+  supabaseUrl && supabasePublishableKey
+    ? createClient(supabaseUrl, supabasePublishableKey)
+    : null;
+
+async function fetchCurrentUser(): Promise<AuthUser | null> {
+  if (!supabase) return null;
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  const accessToken = session?.access_token;
+  if (!accessToken) return null;
+
+  const res = await fetch('/api/auth/user', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) return null;
+
+  const data = (await res.json()) as { user: AuthUser | null };
+  return data.user ?? null;
 }
 
 export function useAuth(): AuthState {
@@ -22,14 +45,10 @@ export function useAuth(): AuthState {
   useEffect(() => {
     let cancelled = false;
 
-    fetch('/api/auth/user', { credentials: 'include' })
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json() as Promise<{ user: AuthUser | null }>;
-      })
-      .then((data) => {
+    fetchCurrentUser()
+      .then((currentUser) => {
         if (!cancelled) {
-          setUser(data.user ?? null);
+          setUser(currentUser);
           setIsLoading(false);
         }
       })
@@ -40,19 +59,38 @@ export function useAuth(): AuthState {
         }
       });
 
+    const { data: listener } =
+      supabase?.auth.onAuthStateChange(async () => {
+        const currentUser = await fetchCurrentUser();
+        if (!cancelled) {
+          setUser(currentUser);
+          setIsLoading(false);
+        }
+      }) ?? { data: { subscription: null } };
+
     return () => {
       cancelled = true;
+      listener.subscription?.unsubscribe();
     };
   }, []);
 
   const login = useCallback(() => {
-    const base = getBasePath();
-    window.location.href = `/api/login?returnTo=${encodeURIComponent(base)}`;
+    if (!supabase) return;
+    const email = window.prompt('Email address');
+    if (!email) return;
+
+    void supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: window.location.href,
+      },
+    });
   }, []);
 
   const logout = useCallback(() => {
-    const base = getBasePath();
-    window.location.href = `/api/logout?returnTo=${encodeURIComponent(base)}`;
+    if (!supabase) return;
+    void supabase.auth.signOut();
+    setUser(null);
   }, []);
 
   return {
